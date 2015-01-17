@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/robustirc/robustirc/types"
-
 	"github.com/sorcix/irc"
 )
 
@@ -32,6 +30,38 @@ const (
 	pathPostMessage   = "/robustirc/v1/%s/message"
 	pathGetMessages   = "/robustirc/v1/%s/messages?lastseen=%s"
 )
+
+type robustId struct {
+	Id    int64
+	Reply int64
+}
+
+func (i *robustId) String() string {
+	return fmt.Sprintf("%d.%d", i.Id, i.Reply)
+}
+
+type robustType int64
+
+const (
+	robustCreateSession = iota
+	robustDeleteSession
+	robustIRCFromClient
+	robustIRCToClient
+	robustPing
+)
+
+type robustMessage struct {
+	Id      robustId
+	Session robustId
+	Type    robustType
+	Data    string
+
+	// List of all servers currently in the network. Only present when Type == RobustPing.
+	Servers []string `json:",omitempty"`
+
+	// ClientMessageId sent by client. Only present when Type == RobustIRCFromClient
+	ClientMessageId uint64 `json:",omitempty"`
+}
 
 var (
 	NoSuchSession = errors.New("No such RobustIRC session (killed by the network?)")
@@ -298,7 +328,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 }
 
 func (s *RobustSession) getMessages() {
-	var lastseen types.RobustId
+	var lastseen robustId
 
 	defer func() {
 		for _ = range s.done {
@@ -312,7 +342,7 @@ func (s *RobustSession) getMessages() {
 			return
 		}
 
-		msgchan := make(chan types.RobustMessage)
+		msgchan := make(chan robustMessage)
 		errchan := make(chan error)
 		done := make(chan bool)
 		go func() {
@@ -325,7 +355,7 @@ func (s *RobustSession) getMessages() {
 					return
 				default:
 				}
-				var msg types.RobustMessage
+				var msg robustMessage
 				if err := dec.Decode(&msg); err != nil {
 					errchan <- err
 					return
@@ -338,9 +368,9 @@ func (s *RobustSession) getMessages() {
 		for !s.deleted {
 			select {
 			case msg := <-msgchan:
-				if msg.Type == types.RobustPing {
+				if msg.Type == robustPing {
 					s.network.setServers(msg.Servers)
-				} else if msg.Type == types.RobustIRCToClient {
+				} else if msg.Type == robustIRCToClient {
 					// TODO: remove/debug
 					log.Printf("<-robustirc: %q\n", msg.Data)
 					s.Messages <- msg.Data
