@@ -1,0 +1,32 @@
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+
+# Folders
+_obj
+_test
+
+# Architecture specific extensions/prefixes
+*.[568vq]
+[568vq].out
+
+*.cgo1.go
+*.cgo2.c
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+_testmain.go
+
+*.exe
+*.test
+*.prof
+
+# Everything above is from https://raw.githubusercontent.com/github/gitignore/master/Go.gitignore
+
+# You should also follow https://help.github.com/articles/ignoring-files/ to
+# ignore vim/emacs/… files globally in git.
+
+# Everything below are specific additions, such as binary names.
+bridge/bridge
