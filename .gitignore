@@ -29,4 +29,4 @@ _testmain.go
 # ignore vim/emacs/… files globally in git.
 
 # Everything below are specific additions, such as binary names.
-bridge/bridge
+robustirc-bridge/bridge
