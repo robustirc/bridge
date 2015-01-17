@@ -15,7 +15,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/robustirc/robustirc/cmd/robustirc-bridge/robustsession"
+	"github.com/robustirc/bridge/robustsession"
 
 	"github.com/sorcix/irc"
 )
