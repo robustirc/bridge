@@ -174,7 +174,11 @@ func (n *network) failed(server string) {
 	defer n.mu.Unlock()
 
 	b := n.backoff[server]
-	b.exp++
+	// Cap the exponential backoff at 2^6 = 64 seconds. In that region, we run
+	// into danger of the client disconnecting due to ping timeout.
+	if b.exp < 6 {
+		b.exp++
+	}
 	b.next = time.Now().Add(time.Duration(math.Pow(2, b.exp)) * time.Second)
 	n.backoff[server] = b
 }
