@@ -8,11 +8,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"math/rand"
 	"net"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/robustirc/bridge/robustsession"
@@ -34,12 +37,51 @@ var (
 	tlsCAFile = flag.String("tls_ca_file",
 		"",
 		"Use the specified file as trusted CA instead of the system CAs. Useful for testing.")
+
+	motdPath = flag.String("motd_path",
+		"/usr/share/robustirc/bridge-motd.txt",
+		"Path to a text file containing the message of the day (MOTD) to prefix to the network MOTD.")
 )
 
 // TODO(secure): persistent state:
 // - the last known server(s) in the network. added to *servers
 // - for resuming sessions (later): the last seen message id, perhaps setup messages (JOINs, MODEs, …)
 // for hosted mode, this state is stored per-nickname, ideally encrypted with password
+
+func prefixMotd(msg string) string {
+	// The user chose to not inject a MOTD.
+	if *motdPath == "" {
+		return msg
+	}
+
+	sep := strings.Index(msg[1:], ":")
+	if sep == -1 {
+		return msg
+	}
+
+	prefix := msg[:sep+2] + "- "
+
+	f, err := os.Open(*motdPath)
+	if err != nil {
+		log.Printf("Cannot inject MOTD: %v\n", err)
+		return msg
+	}
+	defer f.Close()
+
+	var injected []string
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		injected = append(injected, prefix+scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Printf("Cannot inject MOTD: %v\n", err)
+		return msg
+	}
+
+	return strings.Join(injected, "\r\n") + "\r\n" + msg
+}
 
 type bridge struct {
 	network string
@@ -145,6 +187,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	var sendIRC, sendRobust []byte
 
 	keepalivePong := ":" + robustSession.IrcPrefix.String() + " PONG keepalive"
+	motdPrefix := ":" + robustSession.IrcPrefix.String() + " 372 "
 
 	keepaliveToNetwork := time.After(1 * time.Minute)
 	keepaliveToClient := time.After(1 * time.Minute)
@@ -171,6 +214,11 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 		select {
 		case msg := <-robustSession.Messages:
+			// Inject the bridge’s message of the day.
+			if strings.HasPrefix(msg, motdPrefix) {
+				sendIRC = []byte(prefixMotd(msg))
+				break
+			}
 			if msg == keepalivePong {
 				log.Printf("Swallowing keepalive PONG from server to avoid confusing the IRC client.\n")
 				break
