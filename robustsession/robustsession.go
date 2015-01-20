@@ -131,12 +131,21 @@ func newNetwork(networkname string) (*network, error) {
 // server (eventually) returns the host:port to which we should connect to. In
 // case back-off prevents us from connecting anywhere right now, the function
 // blocks until back-off is over.
-func (n *network) server() string {
+func (n *network) server(random bool) string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
 	for {
 		soonest := time.Duration(math.MaxInt64)
+		// Try to use a random server, but fall back to using the next
+		// available server in case the randomly picked server is unhealthy.
+		if random {
+			server := n.servers[rand.Intn(len(n.servers))]
+			wait := n.backoff[server].next.Sub(time.Now())
+			if wait <= 0 {
+				return server
+			}
+		}
 		for _, server := range n.servers {
 			wait := n.backoff[server].next.Sub(time.Now())
 			if wait <= 0 {
@@ -212,7 +221,8 @@ type RobustSession struct {
 
 func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *http.Response, error) {
 	for !s.deleted {
-		target := s.network.server()
+		// GET requests are for read-only state and can be answered by any server.
+		target := s.network.server(method == "GET")
 		req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", target, path), bytes.NewBuffer(data))
 		if err != nil {
 			return "", nil, err
