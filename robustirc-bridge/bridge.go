@@ -23,7 +23,7 @@ import (
 var (
 	network = flag.String("network",
 		"",
-		`DNS name to connect to (e.g. "robustirc.net"). The _robustirc._tcp SRV record must be present.`)
+		`Comma-separated list of hosts, or DNS name to connect to (e.g. "robustirc.net"). For the latter to work, the _robustirc._tcp SRV record must be present.`)
 
 	listen = flag.String("listen",
 		"localhost:6667",
