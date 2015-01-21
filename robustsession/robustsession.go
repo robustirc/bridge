@@ -227,6 +227,7 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		if err != nil {
 			return "", nil, err
 		}
+		req.Header.Set("User-Agent", "RobustIRC Bridge v1.0")
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := s.client.Do(req)
