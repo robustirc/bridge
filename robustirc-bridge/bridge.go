@@ -144,6 +144,8 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 	var sendIRC, sendRobust []byte
 
+	keepalivePong := ":" + robustSession.IrcPrefix.String() + " PONG keepalive"
+
 	keepaliveToNetwork := time.After(1 * time.Minute)
 	keepaliveToClient := time.After(1 * time.Minute)
 	for {
@@ -169,8 +171,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 		select {
 		case msg := <-robustSession.Messages:
-			ircmsg := irc.ParseMessage(msg)
-			if ircmsg.Command == irc.PONG && len(ircmsg.Params) > 0 && ircmsg.Params[0] == "keepalive" {
+			if msg == keepalivePong {
 				log.Printf("Swallowing keepalive PONG from server to avoid confusing the IRC client.\n")
 				break
 			}
