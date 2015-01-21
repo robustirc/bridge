@@ -1,0 +1,9 @@
+─────────────────────────────────────────────────────────────────
+You connected to a public RobustIRC bridge.
+
+BY NOT RUNNING A BRIDGE ON THE SAME MACHINE AS YOUR IRC CLIENT,
+YOU DONT GET TRANSPARENT HANDLING OF NETWORK CONNECTION FAILURES.
+
+Please run your own bridge instead. For instructions, see
+http://robustirc.net/
+─────────────────────────────────────────────────────────────────
