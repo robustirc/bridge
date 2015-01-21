@@ -195,6 +195,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 	keepalivePong := ":" + robustSession.IrcPrefix.String() + " PONG keepalive"
 	motdPrefix := ":" + robustSession.IrcPrefix.String() + " 372 "
+	motdInjected := false
 
 	keepaliveToNetwork := time.After(1 * time.Minute)
 	keepaliveToClient := time.After(1 * time.Minute)
@@ -222,7 +223,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		select {
 		case msg := <-robustSession.Messages:
 			// Inject the bridge’s message of the day.
-			if strings.HasPrefix(msg, motdPrefix) {
+			if !motdInjected && strings.HasPrefix(msg, motdPrefix) {
 				sendIRC = []byte(prefixMotd(msg))
 				break
 			}
