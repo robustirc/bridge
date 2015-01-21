@@ -236,6 +236,13 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
+			if cl := resp.Header.Get("Content-Location"); cl != "" {
+				if location, err := url.Parse(cl); err == nil {
+					log.Printf("Preferring %q (current leader)\n", location.Host)
+					s.network.prefer(location.Host)
+				}
+			}
+
 			return target, resp, nil
 		}
 		message, _ := ioutil.ReadAll(resp.Body)
@@ -323,13 +330,6 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 
 	if err := json.NewDecoder(resp.Body).Decode(&createSessionReply); err != nil {
 		return nil, err
-	}
-
-	if cl := resp.Header.Get("Content-Location"); cl != "" {
-		if location, err := url.Parse(cl); err == nil {
-			log.Printf("Preferring %q (current leader)\n", location.Host)
-			s.network.prefer(location.Host)
-		}
 	}
 
 	s.sessionId = createSessionReply.Sessionid
