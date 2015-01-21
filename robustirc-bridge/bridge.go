@@ -48,6 +48,13 @@ var (
 // - for resuming sessions (later): the last seen message id, perhaps setup messages (JOINs, MODEs, …)
 // for hosted mode, this state is stored per-nickname, ideally encrypted with password
 
+// prefixMotd takes an irc.MOTD message from the server and prefixes it with
+// our own MOTD. E.g., it takes:
+//   :robustirc.net 372 sECuRE :- First line of MOTD\r\n
+// and turns that into:
+//   :robustirc.net 372 sECuRE :- First line of bridge MOTD\r\n
+//   :robustirc.net 372 sECuRE :- Thanks for using this bridge! Enjoy!\r\n
+//   :robustirc.net 372 sECuRE :- First line of MOTD\r\n
 func prefixMotd(msg string) string {
 	// The user chose to not inject a MOTD.
 	if *motdPath == "" {
