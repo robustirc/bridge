@@ -161,7 +161,6 @@ func (s *ircsession) getMessages() {
 		if ircmsg == nil {
 			continue
 		}
-		log.Printf("<-irc: %q\n", ircmsg.Bytes())
 		s.Messages <- *ircmsg
 	}
 }

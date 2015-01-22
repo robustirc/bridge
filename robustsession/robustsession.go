@@ -386,8 +386,6 @@ func (s *RobustSession) getMessages() {
 				if msg.Type == robustPing {
 					s.network.setServers(msg.Servers)
 				} else if msg.Type == robustIRCToClient {
-					// TODO: remove/debug
-					log.Printf("<-robustirc: %q\n", msg.Data)
 					s.Messages <- msg.Data
 					lastseen = msg.Id
 				}
