@@ -32,7 +32,9 @@ var (
 		"localhost:6667",
 		"host:port to listen on for IRC connections")
 
-	socks = flag.String("socks", "", "host:port to listen on for SOCKS5 connections")
+	socks = flag.String("socks",
+		"localhost:1080",
+		"host:port to listen on for SOCKS5 connections")
 
 	tlsCAFile = flag.String("tls_ca_file",
 		"",
@@ -288,13 +290,15 @@ func main() {
 
 	rand.Seed(time.Now().Unix())
 
-	if *network == "" && *socks == "" {
-		log.Fatal("You must specify either -network or -socks.")
+	if (*network == "" && *socks == "") ||
+		(*socks == "" && *listen == "") {
+		log.Fatal("You must specify either -network and -listen, or -socks.")
 	}
 
 	// SOCKS and IRC
-	if *socks != "" && *network != "" {
+	if *socks != "" && *network != "" && *listen != "" {
 		go func() {
+			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
 			if err := listenAndServeSocks(*socks); err != nil {
 				log.Fatal(err)
 			}
@@ -302,12 +306,13 @@ func main() {
 	}
 
 	// SOCKS only
-	if *socks != "" && *network == "" {
+	if *socks != "" && (*network == "" || *listen == "") {
+		log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
 		log.Fatal(listenAndServeSocks(*socks))
 	}
 
 	// IRC
-	if *network != "" {
+	if *network != "" && *listen != "" {
 		p := newBridge(*network)
 
 		ln, err := net.Listen("tcp", *listen)
@@ -315,7 +320,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		log.Printf("RobustIRC IRC bridge listening on %q\n", *listen)
+		log.Printf("RobustIRC IRC bridge listening on %q (IRC)\n", *listen)
 
 		for {
 			conn, err := ln.Accept()
