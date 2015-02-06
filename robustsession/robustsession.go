@@ -158,6 +158,9 @@ func (n *network) server(random bool) string {
 
 		time.Sleep(soonest)
 	}
+
+	// Unreached, but necessary for compiling with go1.0.2 (debian stable).
+	return ""
 }
 
 func (n *network) setServers(servers []string) {

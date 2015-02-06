@@ -11,6 +11,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"math/rand"
 	"net"
@@ -79,14 +80,20 @@ func prefixMotd(msg string) string {
 
 	var injected []string
 
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		injected = append(injected, prefix+scanner.Text())
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Printf("Cannot inject MOTD: %v\n", err)
-		return msg
+	reader := bufio.NewReader(f)
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Printf("Cannot inject MOTD: %v\n", err)
+			return msg
+		}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		injected = append(injected, prefix+line)
 	}
 
 	return strings.Join(injected, "\r\n") + "\r\n" + msg

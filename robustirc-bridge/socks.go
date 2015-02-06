@@ -73,6 +73,9 @@ func listenAndServeSocks(addr string) error {
 			}
 		}()
 	}
+
+	// Unreached, but necessary for compiling with go1.0.2 (debian stable).
+	return nil
 }
 
 func (s *socksServer) handleConn() (err error) {
