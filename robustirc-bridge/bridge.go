@@ -246,7 +246,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 			return
 
 		case ircmsg := <-ircSession.Messages:
-			switch ircmsg.Command {
+			switch strings.ToUpper(ircmsg.Command) {
 			case irc.PONG:
 				waitingForPingReply = false
 
