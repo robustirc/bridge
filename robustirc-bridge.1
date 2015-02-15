@@ -45,9 +45,13 @@ also http://golang.org/pkg/net/#Dial for more details).
 
 .TP
 .BI \-network\  address \fR
-When accepting new connections on the port specified by \fB-listen\fR, to which network should they be bridged? This is a DNS name such as "robustirc.net". The servers to connect to will be resolved by resolving the _robustirc._tcp SRV record for that DNS name.
+When accepting new connections on the port specified by \fB-listen\fR, to which
+network should they be bridged? This is a DNS name such as "robustirc.net". The
+servers to connect to will be resolved by resolving the _robustirc._tcp SRV
+record for that DNS name.
 
-If \fB-network\fR is unspecified, \fB-listen\fR will not be used, and only the \fB-socks\fR functionality will be provided.
+If \fB-network\fR is unspecified, \fB-listen\fR will not be used, and only the
+\fB-socks\fR functionality will be provided.
 
 .TP
 .BI \-socks\  address \fR
@@ -56,7 +60,8 @@ also http://golang.org/pkg/net/#Dial for more details).
 
 .TP
 .BI \-motd_path\  path \fR
-Path to a text file containing the message of the day (MOTD) to prefix to the network MOTD.
+Path to a text file containing the message of the day (MOTD) to prefix to the
+network MOTD.
 
 The default MOTD warns people that they should run their own bridge instead of
 connecting, and you are expected to specify \fB-motd_path=\fR (i.e. empty) when
