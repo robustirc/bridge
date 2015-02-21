@@ -273,6 +273,10 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 //
 // When err == nil, the caller MUST read the RobustSession.Messages and
 // RobustSession.Errors channels.
+//
+// tlsCAFile specifies the path to an x509 root certificate, which is mostly
+// useful for testing. If empty, the system CA store will be used
+// (recommended).
 func Create(network string, tlsCAFile string) (*RobustSession, error) {
 	networksMu.Lock()
 	n, ok := networks[network]
