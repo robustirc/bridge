@@ -220,6 +220,7 @@ type RobustSession struct {
 	done        chan bool
 	network     *network
 	client      *http.Client
+	sendingMu   *sync.Mutex
 }
 
 func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *http.Response, error) {
@@ -317,11 +318,12 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 	}
 
 	s := &RobustSession{
-		Messages: make(chan string),
-		Errors:   make(chan error),
-		done:     make(chan bool),
-		network:  n,
-		client:   client,
+		Messages:  make(chan string),
+		Errors:    make(chan error),
+		done:      make(chan bool),
+		network:   n,
+		client:    client,
+		sendingMu: &sync.Mutex{},
 	}
 
 	_, resp, err := s.sendRequest("POST", pathCreateSession, nil)
@@ -430,8 +432,16 @@ func (s *RobustSession) getMessages() {
 	}
 }
 
-// PostMessage posts the given IRC message.
+// PostMessage posts the given IRC message. It will retry automatically on
+// transient errors, and only return an error when the network returned a
+// permanent error, such as NoSuchSession.
+//
+// The RobustIRC protocol dictates that you must not try to send more than one
+// message at any given point in time, and PostMessage enforces this by using a
+// mutex.
 func (s *RobustSession) PostMessage(message string) error {
+	s.sendingMu.Lock()
+	defer s.sendingMu.Unlock()
 	type postMessageRequest struct {
 		Data            string
 		ClientMessageId uint64
