@@ -113,7 +113,8 @@ type ircsession struct {
 	Messages chan irc.Message
 	Errors   chan error
 
-	conn *irc.Conn
+	conn    *irc.Conn
+	rawConn net.Conn
 }
 
 func newIrcsession(conn net.Conn) *ircsession {
@@ -121,6 +122,7 @@ func newIrcsession(conn net.Conn) *ircsession {
 		Messages: make(chan irc.Message),
 		Errors:   make(chan error),
 		conn:     irc.NewConn(conn),
+		rawConn:  conn,
 	}
 	go s.getMessages()
 	return s
@@ -160,6 +162,43 @@ func (s *ircsession) Delete(killmsg string) error {
 func (s *ircsession) getMessages() {
 	defer close(s.Messages)
 	defer close(s.Errors)
+
+	// Read the first byte. If it’s 4 or 5, this is likely SOCKS
+	first := make([]byte, 1)
+	if _, err := s.rawConn.Read(first); err != nil {
+		s.Errors <- err
+		return
+	}
+
+	// %x04 or %x05 as the first byte is both invalid according to RFC2812
+	// section 2.3.1. Valid characters are ":" (%x3A) or %x30-39 (0-9) or
+	// %x41-5A / %x61-7A (A-Z / a-z).
+	// So we can just close the connection here, and also log that the user is
+	// most likely trying to use SOCKS on the wrong port.
+	//
+	// TODO(secure): With some refactoring, we might even just handle the SOCKS
+	// connection properly.
+	if first[0] == 4 || first[0] == 5 {
+		log.Printf("Read 0x%02x as first byte, which looks like a SOCKS version number. Please connect to %q instead of %q.\n", first[0], *socks, *listen)
+		s.Errors <- fmt.Errorf("Read 0x%02x (SOCKS version?) as first byte on an IRC connection", first[0])
+		return
+	}
+
+	line := []byte{first[0]}
+
+	for first[0] != '\n' {
+		if _, err := s.rawConn.Read(first); err != nil {
+			s.Errors <- err
+			return
+		}
+		line = append(line, first[0])
+	}
+
+	ircmsg := irc.ParseMessage(string(line))
+	if ircmsg != nil {
+		s.Messages <- *ircmsg
+	}
+
 	for {
 		ircmsg, err := s.conn.Decode()
 		if err != nil {
