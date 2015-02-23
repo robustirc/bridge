@@ -227,7 +227,8 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 	for !s.deleted {
 		// GET requests are for read-only state and can be answered by any server.
 		target := s.network.server(method == "GET")
-		req, err := http.NewRequest(method, fmt.Sprintf("https://%s%s", target, path), bytes.NewBuffer(data))
+		requrl := fmt.Sprintf("https://%s%s", target, path)
+		req, err := http.NewRequest(method, requrl, bytes.NewBuffer(data))
 		if err != nil {
 			return "", nil, err
 		}
@@ -237,13 +238,12 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		resp, err := s.client.Do(req)
 		if err != nil {
 			s.network.failed(target)
-			log.Printf("sendRequest(%q) failed: %v\n", path, err)
+			log.Printf("Warning: %s: %v (trying different server)\n", requrl, err)
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
 			if cl := resp.Header.Get("Content-Location"); cl != "" {
 				if location, err := url.Parse(cl); err == nil {
-					log.Printf("Preferring %q (current leader)\n", location.Host)
 					s.network.prefer(location.Host)
 				}
 			}
@@ -258,11 +258,11 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		}
 		// Server errors, temporary.
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
-			log.Printf("sendRequest(%q) failed with %v: %q (retrying)\n", path, resp.Status, message)
+			log.Printf("Warning: %s: %v: %q (trying different server)\n", requrl, resp.Status, message)
 			continue
 		}
 		// Client errors and anything unexpected, assumed to be permanent.
-		return "", nil, fmt.Errorf("sendRequest(%q) failed with %v: %q\n", path, resp.Status, message)
+		return "", nil, fmt.Errorf("Error: %s: %v: %q (non-recoverable)\n", requrl, resp.Status, message)
 	}
 
 	return "", nil, NoSuchSession
@@ -400,7 +400,9 @@ func (s *RobustSession) getMessages() {
 				}
 
 			case err := <-errchan:
-				log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
+				if !s.deleted {
+					log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
+				}
 				s.network.failed(target)
 				break ReadLoop
 

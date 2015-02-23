@@ -220,9 +220,14 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	ircSession := newIrcsession(conn)
 
 	defer func() {
+		log.Printf("Terminating IRC connection from %s. killmsg=%q\n", conn.RemoteAddr(), killmsg)
 		if err := ircSession.Delete(killmsg); err != nil {
 			log.Printf("Could not properly delete IRC session: %v\n", err)
 		}
+		// The separator makes it easier to read logs when the client is
+		// reconnecting in a loop (which is the most common situation in which
+		// you’re interested in the logs at all).
+		log.Printf("\n")
 	}()
 
 	robustSession, err := robustsession.Create(p.network, *tlsCAFile)
@@ -231,8 +236,10 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		return
 	}
 
+	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId, conn.RemoteAddr())
+
 	defer func() {
-		log.Printf("deleting robustsession…\n")
+		log.Printf("[session %s] Deleting RobustSession. quitmsg=%q\n", robustSession.SessionId, quitmsg)
 		if err := robustSession.Delete(quitmsg); err != nil {
 			log.Printf("Could not properly delete RobustIRC session: %v\n", err)
 		}
@@ -242,6 +249,8 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 	keepalivePong := ":" + robustSession.IrcPrefix.String() + " PONG keepalive"
 	motdPrefix := ":" + robustSession.IrcPrefix.String() + " 372 "
+	welcomePrefix := ":" + robustSession.IrcPrefix.String() + " 001 "
+	welcomed := false
 	motdInjected := false
 
 	keepaliveToNetwork := time.After(1 * time.Minute)
@@ -274,8 +283,12 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				sendIRC = []byte(prefixMotd(msg))
 				break
 			}
+			// For debugging purposes, print a log message when the client successfully logs into IRC.
+			if !welcomed && strings.HasPrefix(msg, welcomePrefix) {
+				log.Printf("[session %s] Successfully logged into IRC.\n", robustSession.SessionId)
+				welcomed = true
+			}
 			if msg == keepalivePong {
-				log.Printf("Swallowing keepalive PONG from server to avoid confusing the IRC client.\n")
 				break
 			}
 			sendIRC = []byte(msg)
