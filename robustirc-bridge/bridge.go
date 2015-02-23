@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -36,6 +37,14 @@ var (
 	socks = flag.String("socks",
 		"localhost:1080",
 		"host:port to listen on for SOCKS5 connections")
+
+	tlsCertPath = flag.String("tls_cert_path",
+		"",
+		"Path to a .pem file containing the TLS certificate. If unspecified, TLS is not used.")
+
+	tlsKeyPath = flag.String("tls_key_path",
+		"",
+		"Path to a .pem file containing the TLS private key. If unspecified, TLS is not used.")
 
 	tlsCAFile = flag.String("tls_ca_file",
 		"",
@@ -344,6 +353,50 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	}
 }
 
+// Copied from src/net/http/server.go
+type tcpKeepAliveListener struct {
+	*net.TCPListener
+}
+
+func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
+	tc, err := ln.AcceptTCP()
+	if err != nil {
+		return
+	}
+	tc.SetKeepAlive(true)
+	tc.SetKeepAlivePeriod(3 * time.Minute)
+	return tc, nil
+}
+
+// maybeTLSListener returns a net.Listener which possibly uses TLS, depending
+// on the -tls_cert_path and -tls_key_path flag values.
+func maybeTLSListener(addr string) net.Listener {
+	if *tlsCertPath == "" || *tlsKeyPath == "" {
+		ln, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return ln
+	}
+
+	tlsconfig := &tls.Config{
+		Certificates: make([]tls.Certificate, 1),
+	}
+
+	var err error
+	tlsconfig.Certificates[0], err = tls.LoadX509KeyPair(*tlsCertPath, *tlsKeyPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return tls.NewListener(tcpKeepAliveListener{ln.(*net.TCPListener)}, tlsconfig)
+}
+
 func main() {
 	flag.Parse()
 
@@ -358,7 +411,7 @@ func main() {
 	if *socks != "" && *network != "" && *listen != "" {
 		go func() {
 			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
-			if err := listenAndServeSocks(*socks); err != nil {
+			if err := serveSocks(maybeTLSListener(*socks)); err != nil {
 				log.Fatal(err)
 			}
 		}()
@@ -367,17 +420,13 @@ func main() {
 	// SOCKS only
 	if *socks != "" && (*network == "" || *listen == "") {
 		log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
-		log.Fatal(listenAndServeSocks(*socks))
+		log.Fatal(serveSocks(maybeTLSListener(*socks)))
 	}
 
 	// IRC
 	if *network != "" && *listen != "" {
 		p := newBridge(*network)
-
-		ln, err := net.Listen("tcp", *listen)
-		if err != nil {
-			log.Fatal(err)
-		}
+		ln := maybeTLSListener(*listen)
 
 		log.Printf("RobustIRC IRC bridge listening on %q (IRC)\n", *listen)
 

@@ -53,14 +53,9 @@ type socksConnectionData struct {
 	Port     uint16
 }
 
-func listenAndServeSocks(addr string) error {
-	l, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
+func serveSocks(ln net.Listener) error {
 	for {
-		conn, err := l.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
 			log.Printf("Could not accept SOCKS client connection: %v\n", err)
 			continue

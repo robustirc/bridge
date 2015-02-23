@@ -23,6 +23,10 @@ robustirc-bridge \- bridge between IRC and RobustIRC
 .IR address \|]
 .RB [\|\-tls_ca_file
 .IR path \|]
+.RB [\|\-tls_cert_path
+.IR path \|]
+.RB [\|\-tls_key_path
+.IR path \|]
 .RB [\|\-motd_path
 .IR path \|]
 
@@ -67,6 +71,14 @@ The default MOTD warns people that they should run their own bridge instead of
 connecting, and you are expected to specify \fB-motd_path=\fR (i.e. empty) when
 starting the bridge in a scenario where you are the only user or all users run
 their IRC client on the same machine as the bridge.
+
+.TP
+.BI \-tls_cert_path\  path \fR
+Path to a .pem file containing the TLS certificate. If unspecified, TLS is not used.
+
+.TP
+.BI \-tls_key_path\  path \fR
+Path to a .pem file containing the TLS private key. If unspecified, TLS is not used.
 
 .TP
 .BI \-tls_ca_file\  path \fR
