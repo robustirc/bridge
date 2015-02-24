@@ -251,6 +251,8 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		return
 	}
 
+	robustSession.ForwardedFor = conn.RemoteAddr().String()
+
 	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId(), conn.RemoteAddr())
 
 	defer func() {

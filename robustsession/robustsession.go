@@ -215,6 +215,11 @@ type RobustSession struct {
 	Errors    chan error
 
 	sessionId string
+
+	// ForwardedFor will be sent in all HTTP requests as X-Forwarded-For header
+	// if non-empty.
+	ForwardedFor string
+
 	sessionAuth string
 	deleted     bool
 	done        chan bool
@@ -234,6 +239,9 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		}
 		req.Header.Set("User-Agent", "RobustIRC Bridge v1.0")
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
+		if s.ForwardedFor != "" {
+			req.Header.Set("X-Forwarded-For", s.ForwardedFor)
+		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := s.client.Do(req)
 		if err != nil {
