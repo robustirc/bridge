@@ -1,0 +1,22 @@
+[Unit]
+Description=RobustIRC bridge
+Documentation=man:robustirc-bridge(1)
+Documentation=http://robustirc.net/
+
+[Service]
+Restart=on-failure
+# By default, the RobustIRC bridge is started in SOCKS proxy mode only.
+# Override ExecStart with the following for exposing an IRC port (for clients
+# without SOCKS proxy support, such as irssi), bridging to robustirc.net:
+#  ExecStart=/usr/bin/robustirc-bridge -network=robustirc.net
+ExecStart=/usr/bin/robustirc-bridge -socks=localhost:1080 -listen=
+# The bridge only needs network access and is entirely stateless. Therefore,
+# restrict access to the system as far as possible.
+User=nobody
+PrivateDevices=true
+ProtectSystem=true
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
