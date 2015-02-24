@@ -251,10 +251,10 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		return
 	}
 
-	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId, conn.RemoteAddr())
+	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId(), conn.RemoteAddr())
 
 	defer func() {
-		log.Printf("[session %s] Deleting RobustSession. quitmsg=%q\n", robustSession.SessionId, quitmsg)
+		log.Printf("[session %s] Deleting RobustSession. quitmsg=%q\n", robustSession.SessionId(), quitmsg)
 		if err := robustSession.Delete(quitmsg); err != nil {
 			log.Printf("Could not properly delete RobustIRC session: %v\n", err)
 		}
@@ -300,7 +300,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 			}
 			// For debugging purposes, print a log message when the client successfully logs into IRC.
 			if !welcomed && strings.HasPrefix(msg, welcomePrefix) {
-				log.Printf("[session %s] Successfully logged into IRC.\n", robustSession.SessionId)
+				log.Printf("[session %s] Successfully logged into IRC.\n", robustSession.SessionId())
 				welcomed = true
 			}
 			if msg == keepalivePong {

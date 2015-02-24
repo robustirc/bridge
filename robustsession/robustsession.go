@@ -214,7 +214,7 @@ type RobustSession struct {
 	Messages  chan string
 	Errors    chan error
 
-	SessionId   string
+	sessionId string
 	sessionAuth string
 	deleted     bool
 	done        chan bool
@@ -342,7 +342,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		return nil, err
 	}
 
-	s.SessionId = createSessionReply.Sessionid
+	s.sessionId = createSessionReply.Sessionid
 	s.sessionAuth = createSessionReply.Sessionauth
 	s.IrcPrefix = &irc.Prefix{Name: createSessionReply.Prefix}
 
@@ -360,7 +360,7 @@ func (s *RobustSession) getMessages() {
 	}()
 
 	for !s.deleted {
-		target, resp, err := s.sendRequest("GET", fmt.Sprintf(pathGetMessages, s.SessionId, lastseen.String()), nil)
+		target, resp, err := s.sendRequest("GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
 		if err != nil {
 			s.Errors <- err
 			return
@@ -434,6 +434,12 @@ func (s *RobustSession) getMessages() {
 	}
 }
 
+// SessionId returns a string that identifies the session. It should be used in
+// log messages to identify sessions.
+func (s *RobustSession) SessionId() string {
+	return s.sessionId
+}
+
 // PostMessage posts the given IRC message. It will retry automatically on
 // transient errors, and only return an error when the network returned a
 // permanent error, such as NoSuchSession.
@@ -468,7 +474,7 @@ func (s *RobustSession) PostMessage(message string) error {
 		return fmt.Errorf("Message could not be encoded as JSON: %v\n", err)
 	}
 
-	target, resp, err := s.sendRequest("POST", fmt.Sprintf(pathPostMessage, s.SessionId), b)
+	target, resp, err := s.sendRequest("POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
 	if err != nil {
 		return err
 	}
@@ -514,7 +520,7 @@ func (s *RobustSession) Delete(quitmessage string) error {
 	if err != nil {
 		return err
 	}
-	_, resp, err := s.sendRequest("DELETE", fmt.Sprintf(pathDeleteSession, s.SessionId), b)
+	_, resp, err := s.sendRequest("DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
 	if err != nil {
 		return err
 	}
