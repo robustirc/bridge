@@ -30,3 +30,4 @@ _testmain.go
 
 # Everything below are specific additions, such as binary names.
 robustirc-bridge/robustirc-bridge
+ca-certificates.crt
