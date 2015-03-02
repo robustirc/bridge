@@ -3,7 +3,9 @@
 
 .PHONY: container
 
-all: container
+all:
+	@echo This Makefile is only for building docker containers.
+	@echo Please follow the instructions on http://robustirc.net for running the bridge.
 
 container:
 	(cd robustirc-bridge && go build)
