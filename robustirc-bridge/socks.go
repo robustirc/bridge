@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 )
 
 const (
@@ -58,6 +59,8 @@ func serveSocks(ln net.Listener) error {
 		conn, err := ln.Accept()
 		if err != nil {
 			log.Printf("Could not accept SOCKS client connection: %v\n", err)
+			// Avoid flooding the logs with failed Accept()s.
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		go func() {

@@ -17,7 +17,9 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/robustirc/bridge/robustsession"
@@ -270,6 +272,8 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	welcomed := false
 	motdInjected := false
 
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
 	keepaliveToNetwork := time.After(1 * time.Minute)
 	keepaliveToClient := time.After(1 * time.Minute)
 	for {
@@ -294,6 +298,11 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		}
 
 		select {
+		case sig := <-signalChan:
+			killmsg = fmt.Sprintf("Bridge exiting upon receiving signal (%v)", sig)
+			quitmsg = killmsg
+			return
+
 		case msg := <-robustSession.Messages:
 			// Inject the bridge’s message of the day.
 			if !motdInjected && strings.HasPrefix(msg, motdPrefix) {
@@ -413,11 +422,29 @@ func main() {
 		log.Fatal("You must specify either -network and -listen, or -socks.")
 	}
 
+	var listeners []net.Listener
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
+	go func() {
+		sig := <-signalChan
+		closeTimeout := 1 * time.Second
+		log.Printf("Received signal %q, giving connections %v to close\n", sig, closeTimeout)
+		for _, ln := range listeners {
+			ln.Close()
+		}
+		time.Sleep(closeTimeout)
+		log.Printf("Exiting due to signal %q\n", sig)
+		os.Exit(int(syscall.SIGTERM) | 0x80)
+	}()
+
 	// SOCKS and IRC
 	if *socks != "" && *network != "" && *listen != "" {
 		go func() {
 			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
-			if err := serveSocks(maybeTLSListener(*socks)); err != nil {
+			ln := maybeTLSListener(*socks)
+			listeners = append(listeners, ln)
+			if err := serveSocks(ln); err != nil {
 				log.Fatal(err)
 			}
 		}()
@@ -426,13 +453,16 @@ func main() {
 	// SOCKS only
 	if *socks != "" && (*network == "" || *listen == "") {
 		log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
-		log.Fatal(serveSocks(maybeTLSListener(*socks)))
+		ln := maybeTLSListener(*socks)
+		listeners = append(listeners, ln)
+		log.Fatal(serveSocks(ln))
 	}
 
 	// IRC
 	if *network != "" && *listen != "" {
 		p := newBridge(*network)
 		ln := maybeTLSListener(*listen)
+		listeners = append(listeners, ln)
 
 		log.Printf("RobustIRC IRC bridge listening on %q (IRC)\n", *listen)
 
@@ -440,6 +470,8 @@ func main() {
 			conn, err := ln.Accept()
 			if err != nil {
 				log.Printf("Could not accept IRC client connection: %v\n", err)
+				// Avoid flooding the logs with failed Accept()s.
+				time.Sleep(1 * time.Second)
 				continue
 			}
 			go p.handleIRC(conn)
