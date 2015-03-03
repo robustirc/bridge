@@ -348,7 +348,6 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				return
 			}
 			sendIRC = (&irc.Message{
-				Prefix:  robustSession.IrcPrefix,
 				Command: irc.PING,
 				Params:  []string{"robustirc.bridge"},
 			}).Bytes()
