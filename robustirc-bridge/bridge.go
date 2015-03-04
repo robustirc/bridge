@@ -330,9 +330,10 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 			case irc.PING:
 				sendIRC = (&irc.Message{
-					Prefix:  robustSession.IrcPrefix,
-					Command: irc.PONG,
-					Params:  []string{ircmsg.Params[0]},
+					Prefix:   robustSession.IrcPrefix,
+					Command:  irc.PONG,
+					Params:   ircmsg.Params,
+					Trailing: ircmsg.Trailing,
 				}).Bytes()
 
 			case irc.QUIT:
