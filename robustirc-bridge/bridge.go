@@ -337,8 +337,13 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				}).Bytes()
 
 			case irc.QUIT:
-				quitmsg = ircmsg.Trailing
-				return
+				// Only interpret this as QUIT when it’s coming directly as a
+				// command, not as a server-to-server message.
+				if ircmsg.Prefix == nil {
+					quitmsg = ircmsg.Trailing
+					return
+				}
+				fallthrough
 
 			default:
 				sendRobust = ircmsg.Bytes()
