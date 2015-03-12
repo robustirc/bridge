@@ -405,6 +405,10 @@ func (s *RobustSession) getMessages() {
 				} else if msg.Type == robustIRCToClient {
 					s.Messages <- msg.Data
 					lastseen = msg.Id
+					if irc.ParseMessage(msg.Data).Command == irc.RPL_ENDOFNAMES {
+						//resp.Body.Close()
+						//return
+					}
 				}
 
 			case err := <-errchan:
