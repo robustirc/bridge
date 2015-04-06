@@ -237,7 +237,7 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		if err != nil {
 			return "", nil, err
 		}
-		req.Header.Set("User-Agent", "RobustIRC Bridge v1.1")
+		req.Header.Set("User-Agent", "RobustIRC Bridge v1.2")
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
 		if s.ForwardedFor != "" {
 			req.Header.Set("X-Forwarded-For", s.ForwardedFor)
