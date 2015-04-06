@@ -31,6 +31,8 @@ const (
 	pathGetMessages   = "/robustirc/v1/%s/messages?lastseen=%s"
 )
 
+const Version = "RobustIRC Bridge v1.3"
+
 type robustId struct {
 	Id    int64
 	Reply int64
@@ -237,7 +239,7 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		if err != nil {
 			return "", nil, err
 		}
-		req.Header.Set("User-Agent", "RobustIRC Bridge v1.2")
+		req.Header.Set("User-Agent", Version)
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
 		if s.ForwardedFor != "" {
 			req.Header.Set("X-Forwarded-For", s.ForwardedFor)

@@ -61,6 +61,10 @@ var (
 	motdPath = flag.String("motd_path",
 		"/usr/share/robustirc/bridge-motd.txt",
 		"Path to a text file containing the message of the day (MOTD) to prefix to the network MOTD.")
+
+	version = flag.Bool("version",
+		false,
+		"Print version and exit.")
 )
 
 // TODO(secure): persistent state:
@@ -420,6 +424,11 @@ func maybeTLSListener(addr string) net.Listener {
 
 func main() {
 	flag.Parse()
+
+	if *version {
+		fmt.Println(robustsession.Version)
+		return
+	}
 
 	rand.Seed(time.Now().Unix())
 
