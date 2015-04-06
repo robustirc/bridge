@@ -429,14 +429,22 @@ func (s *RobustSession) getMessages() {
 			}
 		}
 		close(done)
+		var wg sync.WaitGroup
+		wg.Add(2)
 		go func() {
 			for _ = range msgchan {
 			}
+			wg.Done()
 		}()
 		go func() {
 			for _ = range errchan {
 			}
+			wg.Done()
 		}()
+		// We need to wait until msgchan and errchan have been closed because
+		// otherwise the goroutine defined above might still try to read from
+		// resp.Body.
+		wg.Wait()
 		// Cannot use discardResponse() because the response never completes.
 		resp.Body.Close()
 
