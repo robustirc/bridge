@@ -293,6 +293,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		var err error
 		n, err = newNetwork(network)
 		if err != nil {
+			networksMu.Unlock()
 			return nil, err
 		}
 		networks[network] = n
