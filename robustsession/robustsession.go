@@ -264,7 +264,7 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		resp.Body.Close()
 		s.network.failed(target)
 		if resp.StatusCode == http.StatusNotFound {
-			return "", nil, NoSuchSession
+			return "", nil, fmt.Errorf("Error: %s: %v (non-recoverable)\n", requrl, NoSuchSession)
 		}
 		// Server errors, temporary.
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 {
