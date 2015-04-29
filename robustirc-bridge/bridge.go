@@ -16,6 +16,8 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strings"
@@ -45,6 +47,10 @@ var (
 	socks = flag.String("socks",
 		"localhost:1080",
 		"host:port to listen on for SOCKS5 connections")
+
+	httpAddress = flag.String("http",
+		"",
+		"(for debugging) host:port to listen on for HTTP connections, exposing /debug/pprof")
 
 	tlsCertPath = flag.String("tls_cert_path",
 		"",
@@ -435,6 +441,12 @@ func main() {
 	if (*network == "" && *socks == "") ||
 		(*socks == "" && *listen == "") {
 		log.Fatal("You must specify either -network and -listen, or -socks.")
+	}
+
+	if *httpAddress != "" {
+		go func() {
+			log.Printf("-http listener failed: %v\n", http.ListenAndServe(*httpAddress, nil))
+		}()
 	}
 
 	var listeners []net.Listener
