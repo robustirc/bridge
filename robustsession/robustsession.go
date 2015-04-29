@@ -382,76 +382,24 @@ func (s *RobustSession) getMessages() {
 			return
 		}
 
-		msgchan := make(chan robustMessage)
-		errchan := make(chan error)
-		done := make(chan bool)
-		go func() {
-			defer close(msgchan)
-			defer close(errchan)
-			dec := json.NewDecoder(resp.Body)
-			for {
-				select {
-				case <-done:
-					return
-				default:
-				}
-				var msg robustMessage
-				if err := dec.Decode(&msg); err != nil {
-					errchan <- err
-					return
-				}
-				msgchan <- msg
-			}
-		}()
-
-	ReadLoop:
+		dec := json.NewDecoder(resp.Body)
 		for !s.deleted {
-			select {
-			case msg := <-msgchan:
-				if msg.Type == robustPing {
-					s.network.setServers(msg.Servers)
-				} else if msg.Type == robustIRCToClient {
-					s.Messages <- msg.Data
-					lastseen = msg.Id
-					if irc.ParseMessage(msg.Data).Command == irc.RPL_ENDOFNAMES {
-						//resp.Body.Close()
-						//return
-					}
-				}
-
-			case err := <-errchan:
+			var msg robustMessage
+			if err := dec.Decode(&msg); err != nil {
 				if !s.deleted {
 					log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
 				}
 				s.network.failed(target)
-				break ReadLoop
-
-			case <-time.After(2 * time.Minute):
-				log.Printf("Timeout (120s) on GetMessages, reconnecting…\n")
-				s.network.failed(target)
-				break ReadLoop
-
-			case <-s.done:
-				break ReadLoop
+				break
+			}
+			if msg.Type == robustPing {
+				s.network.setServers(msg.Servers)
+			} else if msg.Type == robustIRCToClient {
+				s.Messages <- msg.Data
+				lastseen = msg.Id
 			}
 		}
-		close(done)
-		var wg sync.WaitGroup
-		wg.Add(2)
-		go func() {
-			for _ = range msgchan {
-			}
-			wg.Done()
-		}()
-		go func() {
-			for _ = range errchan {
-			}
-			wg.Done()
-		}()
-		// We need to wait until msgchan and errchan have been closed because
-		// otherwise the goroutine defined above might still try to read from
-		// resp.Body.
-		wg.Wait()
+
 		// Cannot use discardResponse() because the response never completes.
 		resp.Body.Close()
 
