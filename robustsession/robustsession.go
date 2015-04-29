@@ -302,7 +302,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 	}
 	networksMu.Unlock()
 
-	var client *http.Client
+	var tlsConfig *tls.Config
 
 	if tlsCAFile != "" {
 		roots := x509.NewCertPool()
@@ -313,19 +313,24 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		if !roots.AppendCertsFromPEM(contents) {
 			log.Fatalf("Could not parse %q", tlsCAFile)
 		}
+		tlsConfig = &tls.Config{RootCAs: roots}
+	}
 
-		client = &http.Client{
-			Transport: &http.Transport{
-				TLSClientConfig:     &tls.Config{RootCAs: roots},
-				MaxIdleConnsPerHost: 1,
-			},
-		}
-	} else {
-		client = &http.Client{
-			Transport: &http.Transport{
-				MaxIdleConnsPerHost: 1,
-			},
-		}
+	client := &http.Client{
+		// This is copied from net/http.DefaultTransport as of go1.4.
+		Transport: &http.Transport{
+			// The 70s timeout has been chosen such that:
+			// 1) It is higher than the interval with which the server sends pings
+			//    to us (20s).
+			// 2) It is higher than the interval with which we send pings to the
+			//    server (60s) so that the connections can be re-used (HTTP
+			//    keepalive).
+			Dial:                DeadlineConnDialer(5*time.Second, 30*time.Second, 70*time.Second),
+			TLSHandshakeTimeout: 10 * time.Second,
+			TLSClientConfig:     tlsConfig,
+			Proxy:               http.ProxyFromEnvironment,
+			MaxIdleConnsPerHost: 1,
+		},
 	}
 
 	s := &RobustSession{
@@ -421,8 +426,8 @@ func (s *RobustSession) getMessages() {
 				s.network.failed(target)
 				break ReadLoop
 
-			case <-time.After(1 * time.Minute):
-				log.Printf("Timeout (60s) on GetMessages, reconnecting…\n")
+			case <-time.After(2 * time.Minute):
+				log.Printf("Timeout (120s) on GetMessages, reconnecting…\n")
 				s.network.failed(target)
 				break ReadLoop
 
