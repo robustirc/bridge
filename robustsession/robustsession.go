@@ -316,22 +316,23 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		tlsConfig = &tls.Config{RootCAs: roots}
 	}
 
-	client := &http.Client{
-		// This is copied from net/http.DefaultTransport as of go1.4.
-		Transport: &http.Transport{
-			// The 70s timeout has been chosen such that:
-			// 1) It is higher than the interval with which the server sends pings
-			//    to us (20s).
-			// 2) It is higher than the interval with which we send pings to the
-			//    server (60s) so that the connections can be re-used (HTTP
-			//    keepalive).
-			Dial:                DeadlineConnDialer(5*time.Second, 30*time.Second, 70*time.Second),
-			TLSHandshakeTimeout: 10 * time.Second,
-			TLSClientConfig:     tlsConfig,
-			Proxy:               http.ProxyFromEnvironment,
-			MaxIdleConnsPerHost: 1,
-		},
+	// This is copied from net/http.DefaultTransport as of go1.4.
+	transport := &http.Transport{
+		// The 70s timeout has been chosen such that:
+		// 1) It is higher than the interval with which the server sends pings
+		//    to us (20s).
+		// 2) It is higher than the interval with which we send pings to the
+		//    server (60s) so that the connections can be re-used (HTTP
+		//    keepalive).
+		Dial:                DeadlineConnDialer(5*time.Second, 30*time.Second, 70*time.Second),
+		TLSClientConfig:     tlsConfig,
+		Proxy:               http.ProxyFromEnvironment,
+		MaxIdleConnsPerHost: 1,
 	}
+
+	setupTLSHandshakeTimeout(transport, 10*time.Second)
+
+	client := &http.Client{Transport: transport}
 
 	s := &RobustSession{
 		Messages:  make(chan string),
