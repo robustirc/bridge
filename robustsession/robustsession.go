@@ -31,7 +31,7 @@ const (
 	pathGetMessages   = "/robustirc/v1/%s/messages?lastseen=%s"
 )
 
-const Version = "RobustIRC Bridge v1.4"
+const Version = "RobustIRC Bridge v1.5"
 
 type robustId struct {
 	Id    int64
