@@ -51,7 +51,7 @@ func (d *deadlineConn) Write(b []byte) (int, error) {
 // |keepalivePeriod|.
 func DeadlineConnDialer(dialTimeout, keepalivePeriod, timeout time.Duration) func(string, string) (net.Conn, error) {
 	return func(network, address string) (net.Conn, error) {
-		conn, err := net.DialTimeout(network, address, dialTimeout)
+		conn, err := dualStackDialTimeout(network, address, dialTimeout)
 		if err != nil {
 			return nil, err
 		}
