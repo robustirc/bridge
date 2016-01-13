@@ -8,7 +8,7 @@ RUN echo 'nobody:x:99:99:nobody:/:/bin/sh' >> /etc/passwd
 
 USER nobody
 
-ADD ca-certificates.crt /etc/certs/ca-certificates.crt
+ADD ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ADD robustirc-bridge/robustirc-bridge /usr/bin/robustirc-bridge
 ADD bridge-motd.txt /usr/share/robustirc/bridge-motd.txt
 
