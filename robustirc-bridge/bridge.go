@@ -42,7 +42,7 @@ var (
 
 	listen = flag.String("listen",
 		"localhost:6667",
-		"host:port to listen on for IRC connections")
+		"host:port to listen on for IRC connections. You must also specify -network for -listen to work (or use SOCKS instead)")
 
 	socks = flag.String("socks",
 		"localhost:1080",
@@ -468,7 +468,7 @@ func main() {
 	// SOCKS and IRC
 	if *socks != "" && *network != "" && *listen != "" {
 		go func() {
-			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
+			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS). Specify an empty -socks= to disable.\n", *socks)
 			ln := maybeTLSListener(*socks)
 			listeners = append(listeners, ln)
 			if err := serveSocks(ln); err != nil {
@@ -479,7 +479,8 @@ func main() {
 
 	// SOCKS only
 	if *socks != "" && (*network == "" || *listen == "") {
-		log.Printf("RobustIRC IRC bridge listening on %q (SOCKS)\n", *socks)
+		log.Printf("RobustIRC IRC bridge listening on %q (SOCKS). Specify an empty -socks= to disable.\n", *socks)
+		log.Printf("Not listening on %q (IRC) because -network= was not specified.\n", *listen)
 		ln := maybeTLSListener(*socks)
 		listeners = append(listeners, ln)
 		log.Fatal(serveSocks(ln))
