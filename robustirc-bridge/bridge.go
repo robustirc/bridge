@@ -277,6 +277,10 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	var sendIRC, sendRobust []byte
 
 	keepalivePong := ":" + robustSession.IrcPrefix.String() + " PONG keepalive"
+	// like keepalivePong, but with the trailing parameter encoded using the
+	// prefix separator (as sorcix/irc.v2 does, well in accordance with
+	// RFC1459).
+	keepalivePongTrailing := ":" + robustSession.IrcPrefix.String() + " PONG :keepalive"
 	motdPrefix := ":" + robustSession.IrcPrefix.String() + " 372 "
 	welcomePrefix := ":" + robustSession.IrcPrefix.String() + " 001 "
 	welcomed := false
@@ -324,7 +328,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				log.Printf("[session %s] Successfully logged into IRC.\n", robustSession.SessionId())
 				welcomed = true
 			}
-			if msg == keepalivePong {
+			if msg == keepalivePong || msg == keepalivePongTrailing {
 				break
 			}
 			sendIRC = []byte(msg)
