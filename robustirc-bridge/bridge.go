@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -68,6 +69,10 @@ var (
 	motdPath = flag.String("motd_path",
 		"/usr/share/robustirc/bridge-motd.txt",
 		"Path to a text file containing the message of the day (MOTD) to prefix to the network MOTD.")
+
+	authPath = flag.String("bridge_auth",
+		"",
+		"Path to a text file containing one network:secretkey pair per line to authenticate this bridge against the configured RobustIRC networks.")
 
 	version = flag.Bool("version",
 		false,
@@ -129,11 +134,45 @@ func prefixMotd(msg string) string {
 
 type bridge struct {
 	network string
+	auth    string
+}
+
+func getAuth(path, network string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if st.Mode()&007 != 0 {
+		return "", fmt.Errorf("-bridge_auth=%q has insecure permissions %o, fix with chmod o-rwx %q", path, st.Mode(), path)
+	}
+	authBytes, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	networkPrefix := network + ":"
+	for _, line := range strings.Split(string(authBytes), "\n") {
+		if strings.HasPrefix(line, networkPrefix) {
+			auth := line[len(networkPrefix):]
+			if got, want := len(auth), 32; got < want {
+				return "", fmt.Errorf("Authentication data for network %q in %q is too short: got %d, want at least %d bytes", network, path, got, want)
+			}
+			return auth, nil
+		}
+	}
+	return "", nil
 }
 
 func newBridge(network string) *bridge {
+	auth, err := getAuth(*authPath, network)
+	if err != nil {
+		log.Printf("Could not get authentication data for network %q: %v", network, err)
+	}
 	return &bridge{
 		network: network,
+		auth:    auth,
 	}
 }
 
@@ -264,6 +303,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 		return
 	}
 
+	robustSession.BridgeAuth = p.auth
 	robustSession.ForwardedFor = conn.RemoteAddr().String()
 
 	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId(), conn.RemoteAddr())

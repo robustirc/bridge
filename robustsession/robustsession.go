@@ -222,6 +222,10 @@ type RobustSession struct {
 	// if non-empty.
 	ForwardedFor string
 
+	// BridgeAuth will be sent in all HTTP requests as X-Bridge-Auth header if
+	// non-empty. See https://github.com/robustirc/robustirc/issues/122
+	BridgeAuth string
+
 	sessionAuth string
 	deleted     bool
 	done        chan bool
@@ -243,6 +247,9 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
 		if s.ForwardedFor != "" {
 			req.Header.Set("X-Forwarded-For", s.ForwardedFor)
+		}
+		if s.BridgeAuth != "" {
+			req.Header.Set("X-Bridge-Auth", s.BridgeAuth)
 		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := s.client.Do(req)
