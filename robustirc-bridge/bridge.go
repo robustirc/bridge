@@ -42,7 +42,7 @@ var (
 
 	listen = flag.String("listen",
 		"localhost:6667",
-		"host:port to listen on for IRC connections. You must also specify -network for -listen to work (or use SOCKS instead)")
+		"comma-separated list of host:port tuples to listen on for IRC connections. You must also specify -network for -listen to work (or use SOCKS instead)")
 
 	socks = flag.String("socks",
 		"localhost:1080",
@@ -493,20 +493,28 @@ func main() {
 	// IRC
 	if *network != "" && *listen != "" {
 		p := newBridge(*network)
-		ln := maybeTLSListener(*listen)
-		listeners = append(listeners, ln)
 
-		log.Printf("RobustIRC IRC bridge listening on %q (IRC)\n", *listen)
+		for _, addr := range strings.Split(*listen, ",") {
+			ln := maybeTLSListener(addr)
+			listeners = append(listeners, ln)
 
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				log.Printf("Could not accept IRC client connection: %v\n", err)
-				// Avoid flooding the logs with failed Accept()s.
-				time.Sleep(1 * time.Second)
-				continue
-			}
-			go p.handleIRC(conn)
+			log.Printf("RobustIRC IRC bridge listening on %q (IRC)\n", addr)
+
+			go func() {
+				for {
+					conn, err := ln.Accept()
+					if err != nil {
+						log.Printf("Could not accept IRC client connection: %v\n", err)
+						// Avoid flooding the logs with failed Accept()s.
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					go p.handleIRC(conn)
+				}
+			}()
 		}
+
+		// Sleep forever
+		<-make(chan struct{})
 	}
 }
