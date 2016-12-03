@@ -471,10 +471,10 @@ func main() {
 
 	// SOCKS and IRC
 	if *socks != "" && *network != "" && *listen != "" {
+		ln := maybeTLSListener(*socks)
+		listeners = append(listeners, ln)
 		go func() {
 			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS). Specify an empty -socks= to disable.\n", *socks)
-			ln := maybeTLSListener(*socks)
-			listeners = append(listeners, ln)
 			if err := serveSocks(ln); err != nil {
 				log.Fatal(err)
 			}
