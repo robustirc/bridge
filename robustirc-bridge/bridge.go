@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/robustirc/bridge/robustsession"
-	"github.com/robustirc/bridge/tlsutil"
 
 	"github.com/sorcix/irc"
 
@@ -455,13 +454,9 @@ func maybeTLSListener(addr string) net.Listener {
 		return ln
 	}
 
-	kpr, err := tlsutil.NewKeypairReloader(*tlsCertPath, *tlsKeyPath)
+	tlsconfig, err := makeTlsConfig()
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	tlsconfig := &tls.Config{
-		GetCertificate: kpr.GetCertificateFunc(),
 	}
 
 	ln, err := net.Listen("tcp", addr)

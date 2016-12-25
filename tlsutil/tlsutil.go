@@ -1,3 +1,5 @@
+// +build go1.4
+
 package tlsutil
 
 import (
