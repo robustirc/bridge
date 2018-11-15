@@ -339,6 +339,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				quitmsg = fmt.Sprintf("Bridge: Send to IRC client: %v", err)
 				return
 			}
+			keepaliveToClient = time.After(1 * time.Minute)
 			sendIRC = nil
 		}
 		if sendRobust != nil {
@@ -347,7 +348,6 @@ func (p *bridge) handleIRC(conn net.Conn) {
 				return
 			}
 			keepaliveToNetwork = time.After(1 * time.Minute)
-			keepaliveToClient = time.After(1 * time.Minute)
 			sendRobust = nil
 		}
 
@@ -424,7 +424,6 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 		case <-keepaliveToNetwork:
 			sendRobust = []byte("PING keepalive")
-			keepaliveToNetwork = time.After(1 * time.Minute)
 		}
 	}
 }
