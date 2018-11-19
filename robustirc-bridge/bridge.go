@@ -469,6 +469,10 @@ func maybeTLSListener(addr string) net.Listener {
 func main() {
 	flag.Parse()
 
+	if os.Getenv("GOKRAZY_FIRST_START") == "1" {
+		os.Exit(125) // on gokrazy.org, this program must be run via a wrapper
+	}
+
 	if *version {
 		fmt.Println(robustsession.Version)
 		return
