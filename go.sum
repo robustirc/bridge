@@ -1,2 +1,2 @@
-github.com/sorcix/irc v1.1.4-0.20170501124343-8becc86e7db2 h1:s9tGJyZAss54vMNYrMVOoLTHVdPVtbjqA85lb2v6cxE=
-github.com/sorcix/irc v1.1.4-0.20170501124343-8becc86e7db2/go.mod h1:MhzbySH63tDknqfvAAFK3ps/942g4z9EeJ/4lGgHyZc=
+github.com/sorcix/irc v1.1.4 h1:KDmVMPPzK4kbf3TQw1RsZAqTsh2JL9Zw69hYduX9Ykw=
+github.com/sorcix/irc v1.1.4/go.mod h1:MhzbySH63tDknqfvAAFK3ps/942g4z9EeJ/4lGgHyZc=
