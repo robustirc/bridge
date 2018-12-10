@@ -1,5 +1,5 @@
 # Start with busybox, but with libc.so.6
-FROM busybox:ubuntu-14.04
+FROM busybox:glibc
 
 MAINTAINER Michael Stapelberg <michael@robustirc.net>
 
