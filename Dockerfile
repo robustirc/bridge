@@ -4,9 +4,9 @@ FROM busybox:glibc
 MAINTAINER Michael Stapelberg <michael@robustirc.net>
 
 # So that we can run as unprivileged user inside the container.
-RUN echo 'nobody:x:99:99:nobody:/:/bin/sh' >> /etc/passwd
+RUN echo 'rnobody:x:99:99:nobody:/:/bin/sh' >> /etc/passwd
 
-USER nobody
+USER rnobody
 
 ADD ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 ADD robustirc-bridge/robustirc-bridge /usr/bin/robustirc-bridge
