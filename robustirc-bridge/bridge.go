@@ -27,7 +27,7 @@ import (
 
 	"github.com/robustirc/bridge/robustsession"
 
-	"github.com/sorcix/irc"
+	"gopkg.in/sorcix/irc.v2"
 
 	// Necessary on go1.0.2 (debian wheezy) to make crypto/tls work with the
 	// certificates on robustirc.net (and possibly others).
@@ -217,8 +217,8 @@ func (s *ircsession) Delete(killmsg string) error {
 
 	if killmsg != "" {
 		return s.conn.Encode(&irc.Message{
-			Command:  "ERROR",
-			Trailing: killmsg,
+			Command: "ERROR",
+			Params:  []string{killmsg},
 		})
 	}
 
@@ -384,17 +384,16 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 			case irc.PING:
 				sendIRC = (&irc.Message{
-					Prefix:   robustSession.IrcPrefix,
-					Command:  irc.PONG,
-					Params:   ircmsg.Params,
-					Trailing: ircmsg.Trailing,
+					Prefix:  robustSession.IrcPrefix,
+					Command: irc.PONG,
+					Params:  ircmsg.Params,
 				}).Bytes()
 
 			case irc.QUIT:
 				// Only interpret this as QUIT when it’s coming directly as a
 				// command, not as a server-to-server message.
 				if ircmsg.Prefix == nil {
-					quitmsg = ircmsg.Trailing
+					quitmsg = ircmsg.Trailing()
 					return
 				}
 				fallthrough

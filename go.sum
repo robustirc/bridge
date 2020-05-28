@@ -1,2 +1,2 @@
-github.com/sorcix/irc v1.1.4 h1:KDmVMPPzK4kbf3TQw1RsZAqTsh2JL9Zw69hYduX9Ykw=
-github.com/sorcix/irc v1.1.4/go.mod h1:MhzbySH63tDknqfvAAFK3ps/942g4z9EeJ/4lGgHyZc=
+gopkg.in/sorcix/irc.v2 v2.0.0-20190306112350-8d7a73540b90 h1:ItuFAq9SlPhZvdIvsdgoE38i9aLLdDpBbFV9vTJhlp8=
+gopkg.in/sorcix/irc.v2 v2.0.0-20190306112350-8d7a73540b90/go.mod h1:PmJkUcwbuPi1FiZ9Rarr6wzVMvzkO7uWqH1jwrMkgW0=
