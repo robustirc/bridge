@@ -31,7 +31,6 @@ import (
 
 	// Necessary on go1.0.2 (debian wheezy) to make crypto/tls work with the
 	// certificates on robustirc.net (and possibly others).
-	_ "crypto/sha1"
 	_ "crypto/sha256"
 	_ "crypto/sha512"
 )
