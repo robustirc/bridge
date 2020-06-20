@@ -388,7 +388,7 @@ func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
 	// Special form of PRIVMSG as per RFC2812 section 3.3.1,
 	// messaging everyone on a server which has a name
 	// matching *.localnet.
-	s.Messages <- ":localhost.localnet NOTICE $*.localnet :" + msg
+	s.Messages <- ":" + s.IrcPrefix.String() + " NOTICE $*.localnet :" + msg
 }
 
 func (s *RobustSession) getMessages() {
