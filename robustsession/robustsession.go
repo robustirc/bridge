@@ -401,7 +401,9 @@ func (s *RobustSession) getMessages() {
 				break
 			}
 			if msg.Type == robustPing {
-				s.network.setServers(msg.Servers)
+				if len(msg.Servers) > 0 {
+					s.network.setServers(msg.Servers)
+				}
 			} else if msg.Type == robustIRCToClient {
 				s.Messages <- msg.Data
 				lastseen = msg.Id
