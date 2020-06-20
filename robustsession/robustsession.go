@@ -226,6 +226,9 @@ type RobustSession struct {
 	// non-empty. See https://github.com/robustirc/robustirc/issues/122
 	BridgeAuth string
 
+	// Format string for unavailability messages to inject.
+	UnavailableMessageFormat string
+
 	sessionAuth string
 	deleted     bool
 	done        chan bool
@@ -375,6 +378,19 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 	return s, nil
 }
 
+func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
+	msgfmt := s.UnavailableMessageFormat
+	if msgfmt == "" {
+		return
+	}
+	msg := fmt.Sprintf(msgfmt, umsg)
+	log.Printf("injecting message: %s", msg)
+	// Special form of PRIVMSG as per RFC2812 section 3.3.1,
+	// messaging everyone on a server which has a name
+	// matching *.localnet.
+	s.Messages <- ":localhost.localnet NOTICE $*.localnet :" + msg
+}
+
 func (s *RobustSession) getMessages() {
 	var lastseen robustId
 
@@ -383,11 +399,18 @@ func (s *RobustSession) getMessages() {
 		}
 	}()
 
+	var unavailability *time.Timer
 	for !s.deleted {
 		target, resp, err := s.sendRequest("GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
 		if err != nil {
 			s.Errors <- err
 			return
+		}
+
+		if unavailability != nil {
+			unavailability.Stop()
+			unavailability = nil
+			s.injectUnavailabilityMessage("RobustIRC connectivity restored!")
 		}
 
 		dec := json.NewDecoder(resp.Body)
@@ -396,6 +419,23 @@ func (s *RobustSession) getMessages() {
 			if err := dec.Decode(&msg); err != nil {
 				if !s.deleted {
 					log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
+
+					// The server rejects/aborts GetMessages requests when
+					// losing contact to the raft leader. Detection for
+					// in-progress requests may take up to 30s:
+					// 20s pingInterval + 10s timeout.
+					if unavailability != nil {
+						unavailability.Stop()
+					}
+					// Typically, we should be able to fail over to a different
+					// available server within one second, even including the up
+					// to 500ms of backoff we are doing below.
+					//
+					// Only when the network is frozen, the timer func will be
+					// called.
+					unavailability = time.AfterFunc(1*time.Second, func() {
+						s.injectUnavailabilityMessage("Early warning: not currently retrieving messages from RobustIRC")
+					})
 				}
 				s.network.failed(target)
 				break

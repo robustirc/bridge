@@ -75,6 +75,10 @@ var (
 	version = flag.Bool("version",
 		false,
 		"Print version and exit.")
+
+	unavailableMessageFormat = flag.String("unavailable_message_format",
+		"%s",
+		"Format string for a message to inject when the RobustIRC network becomes unavailable")
 )
 
 // TODO(secure): persistent state:
@@ -303,6 +307,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 
 	robustSession.BridgeAuth = p.auth
 	robustSession.ForwardedFor = conn.RemoteAddr().String()
+	robustSession.UnavailableMessageFormat = *unavailableMessageFormat
 
 	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId(), conn.RemoteAddr())
 
