@@ -102,9 +102,10 @@ func (n *Network) String() string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	var lines []string
+	now := time.Now()
 	for _, srv := range n.servers {
 		reconnect := "immediately"
-		if next := time.Until(n.backoff[srv].next); next > 0 {
+		if next := n.backoff[srv].next.Sub(now); next > 0 {
 			reconnect = fmt.Sprintf("in %v", next)
 		}
 		lines = append(lines, fmt.Sprintf("\tserver %v (backoff: next possible reconnect: %v)", srv, reconnect))
