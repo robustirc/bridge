@@ -68,7 +68,7 @@ type robustMessage struct {
 var (
 	NoSuchSession = errors.New("No such RobustIRC session (killed by the network?)")
 
-	networks   = make(map[string]*network)
+	networks   = make(map[string]*Network)
 	networksMu sync.Mutex
 )
 
@@ -77,13 +77,44 @@ type backoffState struct {
 	next time.Time
 }
 
-type network struct {
+// CopyNetworks returns a copy of the currently in-use RobustIRC networks
+// for debugging.
+func CopyNetworks() []*Network {
+	networksMu.Lock()
+	defer networksMu.Unlock()
+	r := make([]*Network, 0, len(networks))
+	for _, network := range networks {
+		r = append(r, network)
+	}
+	return r
+}
+
+// A Network is a collection of RobustIRC nodes forming a RobustIRC network.
+// This type is only exported so that you can expose internal network state
+// for debugging via CopyNetworks().
+type Network struct {
 	servers []string
 	mu      sync.RWMutex
 	backoff map[string]backoffState
 }
 
-func newNetwork(networkname string) (*network, error) {
+func (n *Network) String() string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	var lines []string
+	for _, srv := range n.servers {
+		reconnect := "immediately"
+		if next := time.Until(n.backoff[srv].next); next > 0 {
+			reconnect = fmt.Sprintf("in %v", next)
+		}
+		lines = append(lines, fmt.Sprintf("\tserver %v (backoff: next possible reconnect: %v)", srv, reconnect))
+	}
+	return fmt.Sprintf("[network %p with %d servers]\n",
+		n,
+		len(n.servers)) + strings.Join(lines, "\n")
+}
+
+func newNetwork(networkname string) (*Network, error) {
 	var servers []string
 
 	parts := strings.Split(networkname, ",")
@@ -124,7 +155,7 @@ func newNetwork(networkname string) (*network, error) {
 		}
 	}
 
-	return &network{
+	return &Network{
 		servers: servers,
 		backoff: make(map[string]backoffState),
 	}, nil
@@ -133,7 +164,7 @@ func newNetwork(networkname string) (*network, error) {
 // server (eventually) returns the host:port to which we should connect to. In
 // case back-off prevents us from connecting anywhere right now, the function
 // blocks until back-off is over.
-func (n *network) server(random bool) string {
+func (n *Network) server(random bool) string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
@@ -165,7 +196,7 @@ func (n *network) server(random bool) string {
 	return ""
 }
 
-func (n *network) setServers(servers []string) {
+func (n *Network) setServers(servers []string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -176,14 +207,14 @@ func (n *network) setServers(servers []string) {
 // prefer adds the specified server to the front of the servers list, thereby
 // trying to prefer it over other servers for the next request. Note that
 // exponential backoff overrides this, so this is only a hint, not a guarantee.
-func (n *network) prefer(server string) {
+func (n *Network) prefer(server string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	n.servers = append([]string{server}, n.servers...)
 }
 
-func (n *network) failed(server string) {
+func (n *Network) failed(server string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -197,7 +228,7 @@ func (n *network) failed(server string) {
 	n.backoff[server] = b
 }
 
-func (n *network) succeeded(server string) {
+func (n *Network) succeeded(server string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -232,9 +263,13 @@ type RobustSession struct {
 	sessionAuth string
 	deleted     bool
 	done        chan bool
-	network     *network
+	network     *Network
 	client      *http.Client
 	sendingMu   *sync.Mutex
+}
+
+func (s *RobustSession) String() string {
+	return fmt.Sprintf("[session %p] %s", s, s.network.String())
 }
 
 func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *http.Response, error) {

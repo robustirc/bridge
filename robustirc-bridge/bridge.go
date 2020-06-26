@@ -489,6 +489,11 @@ func main() {
 	}
 
 	if *httpAddress != "" {
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			for _, n := range robustsession.CopyNetworks() {
+				fmt.Fprintf(w, "%+v", n)
+			}
+		})
 		go func() {
 			log.Printf("-http listener failed: %v\n", http.ListenAndServe(*httpAddress, nil))
 		}()
