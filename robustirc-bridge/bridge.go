@@ -21,6 +21,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -469,6 +470,19 @@ func maybeTLSListener(addr string) net.Listener {
 	return tls.NewListener(tcpKeepAliveListener{ln.(*net.TCPListener)}, tlsconfig)
 }
 
+func nfds() int {
+	pid, err := strconv.Atoi(os.Getenv("LISTEN_PID"))
+	if err != nil || pid != os.Getpid() {
+		return 0
+	}
+
+	n, err := strconv.Atoi(os.Getenv("LISTEN_FDS"))
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
 func main() {
 	flag.Parse()
 
@@ -483,8 +497,13 @@ func main() {
 
 	rand.Seed(time.Now().Unix())
 
-	if (*network == "" && *socks == "") ||
-		(*socks == "" && *listen == "") {
+	if *socks != "" {
+		// -socks listener specified, which can be pointed to any network.
+	} else if *network != "" && *listen != "" {
+		// -network specified and -listen listener specified.
+	} else if n := nfds(); *network != "" && n > 0 {
+		// -network specified and started via systemd socket activation
+	} else {
 		log.Fatal("You must specify either -network and -listen, or -socks.")
 	}
 
@@ -559,8 +578,42 @@ func main() {
 				}
 			}()
 		}
+	} else if n := nfds(); *network != "" && n > 0 {
+		names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
+		os.Unsetenv("LISTEN_PID")
+		os.Unsetenv("LISTEN_FDS")
+		os.Unsetenv("LISTEN_FDNAMES")
 
-		// Sleep forever
-		<-make(chan struct{})
+		p := newBridge(*network)
+
+		const listenFdsStart = 3 // SD_LISTEN_FDS_START
+		for fd := listenFdsStart; fd < listenFdsStart+n; fd++ {
+			syscall.CloseOnExec(fd)
+			name := "LISTEN_FD_" + strconv.Itoa(fd)
+			offset := fd - listenFdsStart
+			if offset < len(names) && len(names[offset]) > 0 {
+				name = names[offset]
+			}
+			log.Printf("RobustIRC IRC bridge listening on file descriptor %d (%s)", fd, name)
+			f := os.NewFile(uintptr(fd), name)
+			ln, err := net.FileListener(f)
+			if err != nil {
+				log.Fatal(err)
+			}
+			f.Close()
+			go func() {
+				for {
+					conn, err := ln.Accept()
+					if err != nil {
+						log.Printf("Could not accept IRC client connection: %v\n", err)
+						// Avoid flooding the logs with failed Accept()s.
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					go p.handleIRC(conn)
+				}
+			}()
+		}
 	}
+	select {} // sleep forever
 }

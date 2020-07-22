@@ -1,0 +1,8 @@
+[Unit]
+Description=robustirc-bridge
+
+[Socket]
+ListenStream=127.0.0.1:6667
+
+[Install]
+WantedBy=multi-user.target
