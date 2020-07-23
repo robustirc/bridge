@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/robustirc/bridge/deadlineconn"
 	"gopkg.in/sorcix/irc.v2"
 )
 
@@ -377,7 +378,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		// 2) It is higher than the interval with which we send pings to the
 		//    server (60s) so that the connections can be re-used (HTTP
 		//    keepalive).
-		Dial:                DeadlineConnDialer(5*time.Second, 30*time.Second, 70*time.Second),
+		Dial:                deadlineconn.Dialer(5*time.Second, 30*time.Second, 70*time.Second),
 		TLSClientConfig:     tlsConfig,
 		Proxy:               http.ProxyFromEnvironment,
 		MaxIdleConnsPerHost: 1,

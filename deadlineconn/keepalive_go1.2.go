@@ -5,7 +5,7 @@
 // our case. So we also need SetKeepAlivePeriod, which was introduced in
 // go1.2, see https://github.com/golang/go/commit/918922cf
 
-package robustsession
+package deadlineconn
 
 import (
 	"net"

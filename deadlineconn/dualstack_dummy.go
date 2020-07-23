@@ -1,6 +1,6 @@
 // +build !go1.2
 
-package robustsession
+package deadlineconn
 
 import (
 	"net"

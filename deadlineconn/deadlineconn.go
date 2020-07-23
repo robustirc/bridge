@@ -1,4 +1,4 @@
-package robustsession
+package deadlineconn
 
 import (
 	"net"
@@ -22,7 +22,7 @@ type deadlineConn struct {
 	timeout time.Duration
 }
 
-func NewDeadlineConn(conn net.Conn, timeout time.Duration) *deadlineConn {
+func NewConn(conn net.Conn, timeout time.Duration) *deadlineConn {
 	return &deadlineConn{
 		conn,
 		timeout,
@@ -49,7 +49,7 @@ func (d *deadlineConn) Write(b []byte) (int, error) {
 // calls. The dialing itself must be done within |dialTimeout| and TCP
 // keepalive is enabled (if compiled with go1.2+) with a period of
 // |keepalivePeriod|.
-func DeadlineConnDialer(dialTimeout, keepalivePeriod, timeout time.Duration) func(string, string) (net.Conn, error) {
+func Dialer(dialTimeout, keepalivePeriod, timeout time.Duration) func(string, string) (net.Conn, error) {
 	return func(network, address string) (net.Conn, error) {
 		conn, err := dualStackDialTimeout(network, address, dialTimeout)
 		if err != nil {
@@ -65,6 +65,6 @@ func DeadlineConnDialer(dialTimeout, keepalivePeriod, timeout time.Duration) fun
 		// quickly.
 		setupKeepAlive(conn, keepalivePeriod)
 
-		return NewDeadlineConn(conn, timeout), nil
+		return NewConn(conn, timeout), nil
 	}
 }
