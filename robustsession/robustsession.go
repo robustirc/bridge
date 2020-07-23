@@ -120,8 +120,15 @@ func newNetwork(networkname string) (*Network, error) {
 
 	parts := strings.Split(networkname, ",")
 	if len(parts) > 1 {
-		log.Printf("Interpreting %q as list of servers instead of network name\n", networkname)
-		servers = parts
+		// Some transports may return an error when presented with an empty
+		// address, so filter them out explicitly:
+		for _, part := range parts {
+			if strings.TrimSpace(part) == "" {
+				continue
+			}
+			servers = append(servers, part)
+		}
+		log.Printf("Interpreting %q as list of servers (%v) instead of network name\n", networkname, servers)
 	} else {
 		// Try to resolve the DNS name up to 5 times. This is to be nice to
 		// people in environments with flaky network connections at boot, who,
