@@ -251,6 +251,10 @@ func discardResponse(resp *http.Response) {
 	resp.Body.Close()
 }
 
+type doer interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 type RobustSession struct {
 	IrcPrefix *irc.Prefix
 	Messages  chan string
@@ -273,7 +277,7 @@ type RobustSession struct {
 	deleted     bool
 	done        chan bool
 	network     *Network
-	client      *http.Client
+	client      doer
 	sendingMu   *sync.Mutex
 }
 
@@ -332,6 +336,12 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 	return "", nil, NoSuchSession
 }
 
+// newClient can be overridden in custom builds where additional source files in
+// this package can change newClient from their func init.
+var newClient = func(transport *http.Transport) doer {
+	return &http.Client{Transport: transport}
+}
+
 // Create creates a new RobustIRC session. It resolves the given network name
 // (e.g. "robustirc.net") to a set of servers by querying the
 // _robustirc._tcp.<network> SRV record and sends the CreateSession request.
@@ -386,14 +396,12 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 
 	setupTLSHandshakeTimeout(transport, 10*time.Second)
 
-	client := &http.Client{Transport: transport}
-
 	s := &RobustSession{
 		Messages:  make(chan string),
 		Errors:    make(chan error),
 		done:      make(chan bool),
 		network:   n,
-		client:    client,
+		client:    newClient(transport),
 		sendingMu: &sync.Mutex{},
 	}
 
@@ -581,8 +589,10 @@ func (s *RobustSession) Delete(quitmessage string) error {
 		close(s.Messages)
 		close(s.Errors)
 
-		if transport, ok := s.client.Transport.(*http.Transport); ok {
-			transport.CloseIdleConnections()
+		if cl, ok := s.client.(*http.Client); ok {
+			if transport, ok := cl.Transport.(*http.Transport); ok {
+				transport.CloseIdleConnections()
+			}
 		}
 	}()
 
