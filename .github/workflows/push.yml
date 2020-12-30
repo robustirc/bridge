@@ -22,11 +22,18 @@ jobs:
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+        path: go/src/github.com/robustirc/bridge
 
     - name: Ensure all files were formatted as per gofmt
+      env:
+        GOPATH: /home/runner/work/bridge/go
       run: |
         [ "$(gofmt -l $(find . -name '*.go') 2>&1)" = "" ]
 
     - name: Run tests
+      env:
+        GOPATH: /home/runner/work/bridge/go
       run: |
         go get github.com/robustirc/bridge/robustirc-bridge
