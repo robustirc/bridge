@@ -11,6 +11,6 @@ func nfds() int {
 
 // handleSocketActivation is no-op on Windows. It returns an error to be able terminate the program
 // instead of sleeping indefinitely.
-func handleSocketActivation() error {
+func handleSocketActivation(n int) error {
 	return errors.New("systemd socket activation is not available on Windows")
 }

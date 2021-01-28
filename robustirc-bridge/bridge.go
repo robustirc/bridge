@@ -565,7 +565,7 @@ func main() {
 			}()
 		}
 	} else if n := nfds(); *network != "" && n > 0 {
-		if err := handleSocketActivation(); err != nil {
+		if err := handleSocketActivation(n); err != nil {
 			log.Fatal(err)
 		}
 	}
