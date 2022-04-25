@@ -79,6 +79,10 @@ var (
 	unavailableMessageFormat = flag.String("unavailable_message_format",
 		"%s",
 		"Format string for a message to inject when the RobustIRC network becomes unavailable")
+
+	ignoreServerListUpdates = flag.Bool("ignore_server_list_updates",
+		false,
+		"RobustPing messages contain the current list of server addresses of the network, which robustsession uses to keep the list of servers up to date without having to periodically re-resolve the DNS names (--network flag). If IgnoreServerListUpdates is true, robustsession will ignore the list of servers. This is useful when working with different names on client and server, for example when the client connects via a port forwarding.")
 )
 
 // TODO(secure): persistent state:
@@ -308,6 +312,7 @@ func (p *bridge) handleIRC(conn net.Conn) {
 	robustSession.BridgeAuth = p.auth
 	robustSession.ForwardedFor = conn.RemoteAddr().String()
 	robustSession.UnavailableMessageFormat = *unavailableMessageFormat
+	robustSession.IgnoreServerListUpdates = *ignoreServerListUpdates
 
 	log.Printf("[session %s] Created RobustSession for client %s\n", robustSession.SessionId(), conn.RemoteAddr())
 
