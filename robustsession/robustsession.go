@@ -273,6 +273,14 @@ type RobustSession struct {
 	// Format string for unavailability messages to inject.
 	UnavailableMessageFormat string
 
+	// RobustPing messages contain the current list of server addresses of the network,
+	// which robustsession uses to keep the list of servers up to date
+	// without having to periodically re-resolve the DNS names (--network flag).
+	// If IgnoreServerListUpdates is true, robustsession will ignore the list of servers.
+	// This is useful when working with different names on client and server,
+	// for example when the client connects via a port forwarding.
+	IgnoreServerListUpdates bool
+
 	sessionAuth string
 	deleted     bool
 	done        chan bool
@@ -493,7 +501,7 @@ func (s *RobustSession) getMessages() {
 				break
 			}
 			if msg.Type == robustPing {
-				if len(msg.Servers) > 0 {
+				if len(msg.Servers) > 0 && !s.IgnoreServerListUpdates {
 					s.network.setServers(msg.Servers)
 				}
 			} else if msg.Type == robustIRCToClient {
