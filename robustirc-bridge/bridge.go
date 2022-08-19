@@ -48,6 +48,10 @@ var (
 		"localhost:1080",
 		"host:port to listen on for SOCKS5 connections")
 
+	useUnixSocket = flag.Bool("use_unix_socket",
+		false,
+		"If true, interpret the -listen address as a UNIX socket path instead of a TCP address.")
+
 	httpAddress = flag.String("http",
 		"",
 		"(for debugging) host:port to listen on for HTTP connections, exposing /debug/pprof")
@@ -456,6 +460,14 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 // maybeTLSListener returns a net.Listener which possibly uses TLS, depending
 // on the -tls_cert_path and -tls_key_path flag values.
 func maybeTLSListener(addr string) net.Listener {
+	if *useUnixSocket {
+		ln, err := net.Listen("unix", addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return ln
+	}
+
 	if *tlsCertPath == "" || *tlsKeyPath == "" {
 		ln, err := net.Listen("tcp", addr)
 		if err != nil {
