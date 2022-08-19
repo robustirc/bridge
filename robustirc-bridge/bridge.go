@@ -92,11 +92,14 @@ var (
 
 // prefixMotd takes an irc.MOTD message from the server and prefixes it with
 // our own MOTD. E.g., it takes:
-//   :robustirc.net 372 sECuRE :- First line of MOTD\r\n
+//
+//	:robustirc.net 372 sECuRE :- First line of MOTD\r\n
+//
 // and turns that into:
-//   :robustirc.net 372 sECuRE :- First line of bridge MOTD\r\n
-//   :robustirc.net 372 sECuRE :- Thanks for using this bridge! Enjoy!\r\n
-//   :robustirc.net 372 sECuRE :- First line of MOTD\r\n
+//
+//	:robustirc.net 372 sECuRE :- First line of bridge MOTD\r\n
+//	:robustirc.net 372 sECuRE :- Thanks for using this bridge! Enjoy!\r\n
+//	:robustirc.net 372 sECuRE :- First line of MOTD\r\n
 func prefixMotd(msg string) string {
 	// The user chose to not inject a MOTD.
 	if *motdPath == "" {

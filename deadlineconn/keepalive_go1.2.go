@@ -1,3 +1,4 @@
+//go:build go1.2
 // +build go1.2
 
 // While SetKeepAlive is available in go1, the default keepalive
