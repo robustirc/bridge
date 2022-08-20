@@ -25,9 +25,6 @@ jobs:
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v2
-      with:
-        fetch-depth: 1
-        path: go/src/github.com/robustirc/bridge
 
     - name: Ensure all files were formatted as per gofmt
       env:
@@ -39,4 +36,4 @@ jobs:
       env:
         GOPATH: /home/runner/work/bridge/go
       run: |
-        go get github.com/robustirc/bridge/robustirc-bridge
+        go install github.com/robustirc/bridge/robustirc-bridge || go get github.com/robustirc/bridge/robustirc-bridge
