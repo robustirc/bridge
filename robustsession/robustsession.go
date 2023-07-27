@@ -282,11 +282,19 @@ type RobustSession struct {
 	IgnoreServerListUpdates bool
 
 	sessionAuth string
-	deleted     bool
 	done        chan bool
 	network     *Network
 	client      doer
 	sendingMu   *sync.Mutex
+}
+
+func (s *RobustSession) isDeleted() bool {
+	select {
+	case <-s.done:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *RobustSession) String() string {
@@ -294,7 +302,7 @@ func (s *RobustSession) String() string {
 }
 
 func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *http.Response, error) {
-	for !s.deleted {
+	for !s.isDeleted() {
 		// GET requests are for read-only state and can be answered by any server.
 		target := s.network.server(method == "GET")
 		requrl := fmt.Sprintf("https://%s%s", target, path)
@@ -455,12 +463,18 @@ func (s *RobustSession) getMessages() {
 	var lastseen robustId
 
 	defer func() {
-		for _ = range s.done {
+		close(s.Errors)
+		close(s.Messages)
+
+		if cl, ok := s.client.(*http.Client); ok {
+			if transport, ok := cl.Transport.(*http.Transport); ok {
+				transport.CloseIdleConnections()
+			}
 		}
 	}()
 
 	var unavailability *time.Timer
-	for !s.deleted {
+	for !s.isDeleted() {
 		target, resp, err := s.sendRequest("GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
 		if err != nil {
 			s.Errors <- err
@@ -474,10 +488,10 @@ func (s *RobustSession) getMessages() {
 		}
 
 		dec := json.NewDecoder(resp.Body)
-		for !s.deleted {
+		for !s.isDeleted() {
 			var msg robustMessage
 			if err := dec.Decode(&msg); err != nil {
-				if !s.deleted {
+				if !s.isDeleted() {
 					log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
 
 					// The server rejects/aborts GetMessages requests when
@@ -576,32 +590,20 @@ func (s *RobustSession) PostMessage(message string) error {
 // view.
 func (s *RobustSession) Delete(quitmessage string) error {
 	defer func() {
-		s.deleted = true
-
-		// Make sure nobody is blocked on sending to the channel by closing them
-		// and reading all remaining values.
-		go func() {
-			for _ = range s.Messages {
-			}
-		}()
-		go func() {
-			for _ = range s.Errors {
-			}
-		}()
-
-		// This will be read by getMessages(), which will not send on the
-		// channels after reading it, so we can safely close them.
-		s.done <- true
+		// getMessages() will pick up on s.done being closed and close
+		// s.Messages and s.Errors.
 		close(s.done)
 
-		close(s.Messages)
-		close(s.Errors)
-
-		if cl, ok := s.client.(*http.Client); ok {
-			if transport, ok := cl.Transport.(*http.Transport); ok {
-				transport.CloseIdleConnections()
+		// Avoid getMessages() getting stuck on sending to a channel that nobody
+		// reads from by draining the channels.
+		go func() {
+			for range s.Messages {
 			}
-		}
+		}()
+		go func() {
+			for range s.Errors {
+			}
+		}()
 	}()
 
 	b, err := json.Marshal(struct{ Quitmessage string }{quitmessage})
