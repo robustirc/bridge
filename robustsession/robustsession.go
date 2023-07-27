@@ -4,6 +4,7 @@ package robustsession
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -301,7 +302,7 @@ func (s *RobustSession) String() string {
 	return fmt.Sprintf("[session %p] %s", s, s.network.String())
 }
 
-func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *http.Response, error) {
+func (s *RobustSession) sendRequest(ctx context.Context, method, path string, data []byte) (string, *http.Response, error) {
 	for !s.isDeleted() {
 		// GET requests are for read-only state and can be answered by any server.
 		target := s.network.server(method == "GET")
@@ -310,6 +311,7 @@ func (s *RobustSession) sendRequest(method, path string, data []byte) (string, *
 		if err != nil {
 			return "", nil, err
 		}
+		req = req.WithContext(ctx)
 		req.Header.Set("User-Agent", Version)
 		req.Header.Set("X-Session-Auth", s.sessionAuth)
 		if s.ForwardedFor != "" {
@@ -421,7 +423,7 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 		sendingMu: &sync.Mutex{},
 	}
 
-	_, resp, err := s.sendRequest("POST", pathCreateSession, nil)
+	_, resp, err := s.sendRequest(context.Background(), "POST", pathCreateSession, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +477,7 @@ func (s *RobustSession) getMessages() {
 
 	var unavailability *time.Timer
 	for !s.isDeleted() {
-		target, resp, err := s.sendRequest("GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
+		target, resp, err := s.sendRequest(context.Background(), "GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
 		if err != nil {
 			s.Errors <- err
 			return
@@ -574,7 +576,7 @@ func (s *RobustSession) PostMessage(message string) error {
 		return fmt.Errorf("Message could not be encoded as JSON: %v\n", err)
 	}
 
-	target, resp, err := s.sendRequest("POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
+	target, resp, err := s.sendRequest(context.Background(), "POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
 	if err != nil {
 		return err
 	}
@@ -610,7 +612,7 @@ func (s *RobustSession) Delete(quitmessage string) error {
 	if err != nil {
 		return err
 	}
-	_, resp, err := s.sendRequest("DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
+	_, resp, err := s.sendRequest(context.Background(), "DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
 	if err != nil {
 		return err
 	}
