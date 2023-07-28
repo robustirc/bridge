@@ -461,9 +461,97 @@ func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
 	s.Messages <- ":" + s.IrcPrefix.String() + " NOTICE $*.localnet :" + msg
 }
 
-func (s *RobustSession) getMessages() {
-	var lastseen robustId
+func (s *RobustSession) getMessages1(lastseen robustId, unavailability *time.Timer) (robustId, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	target, resp, err := s.sendRequest(ctx, "GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
+	if err != nil {
+		return lastseen, err
+	}
+	defer resp.Body.Close()
+
+	dec := json.NewDecoder(resp.Body)
+	msgchan := make(chan robustMessage)
+	errchan := make(chan error)
+	go func() {
+		defer close(msgchan)
+		defer close(errchan)
+
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			var msg robustMessage
+			if err := dec.Decode(&msg); err != nil {
+				errchan <- err
+				return
+			}
+			msgchan <- msg
+		}
+	}()
+	defer func() {
+		cancel() // multiple cancel calls are idempotent
+
+		// drain both channels to ensure the goroutine above is unblocked
+		go func() {
+			for range msgchan {
+			}
+		}()
+
+		go func() {
+			for range errchan {
+			}
+		}()
+	}()
+
+	for !s.isDeleted() {
+		// The server rejects/aborts GetMessages requests when
+		// losing contact to the raft leader. Detection for
+		// in-progress requests may take up to 30s:
+		// 20s pingInterval + 10s timeout.
+		const getMessagesTimeout = 30 * time.Second
+
+		select {
+		// This application-level timeout covers the case where the underlying
+		// transport does not support (or expose) read/write deadlines,
+		// e.g. when using gRPC.
+		case <-time.After(getMessagesTimeout):
+			s.network.failed(target)
+			return lastseen, nil
+
+		case msg := <-msgchan:
+			if unavailability != nil {
+				unavailability.Stop()
+				unavailability = nil
+				s.injectUnavailabilityMessage("RobustIRC connectivity restored!")
+			}
+
+			if msg.Type == robustPing {
+				if len(msg.Servers) > 0 && !s.IgnoreServerListUpdates {
+					s.network.setServers(msg.Servers)
+				}
+			} else if msg.Type == robustIRCToClient {
+				s.Messages <- msg.Data
+				lastseen = msg.Id
+			}
+
+		case err := <-errchan:
+			if !s.isDeleted() {
+				log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
+			}
+			s.network.failed(target)
+			// Return a nil error: retry the GetMessages request, as it was not
+			// rejected by the server, but failed on the network level.
+			return lastseen, nil
+		}
+	}
+
+	return lastseen, nil
+
+}
+
+func (s *RobustSession) getMessages() {
 	defer func() {
 		close(s.Errors)
 		close(s.Messages)
@@ -475,64 +563,33 @@ func (s *RobustSession) getMessages() {
 		}
 	}()
 
+	var lastseen robustId
 	var unavailability *time.Timer
 	for !s.isDeleted() {
-		target, resp, err := s.sendRequest(context.Background(), "GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
+		var err error
+		lastseen, err = s.getMessages1(lastseen, unavailability)
 		if err != nil {
 			s.Errors <- err
 			return
 		}
 
-		if unavailability != nil {
-			unavailability.Stop()
-			unavailability = nil
-			s.injectUnavailabilityMessage("RobustIRC connectivity restored!")
-		}
-
-		dec := json.NewDecoder(resp.Body)
-		for !s.isDeleted() {
-			var msg robustMessage
-			if err := dec.Decode(&msg); err != nil {
-				if !s.isDeleted() {
-					log.Printf("Protocol error on %q: Could not decode response chunk as JSON: %v\n", target, err)
-
-					// The server rejects/aborts GetMessages requests when
-					// losing contact to the raft leader. Detection for
-					// in-progress requests may take up to 30s:
-					// 20s pingInterval + 10s timeout.
-					if unavailability != nil {
-						unavailability.Stop()
-					}
-					// Typically, we should be able to fail over to a different
-					// available server within one second, even including the up
-					// to 500ms of backoff we are doing below.
-					//
-					// Only when the network is frozen, the timer func will be
-					// called.
-					unavailability = time.AfterFunc(1*time.Second, func() {
-						s.injectUnavailabilityMessage("Early warning: not currently retrieving messages from RobustIRC")
-					})
-				}
-				s.network.failed(target)
-				break
-			}
-			if msg.Type == robustPing {
-				if len(msg.Servers) > 0 && !s.IgnoreServerListUpdates {
-					s.network.setServers(msg.Servers)
-				}
-			} else if msg.Type == robustIRCToClient {
-				s.Messages <- msg.Data
-				lastseen = msg.Id
-			}
-		}
-
-		// Cannot use discardResponse() because the response never completes.
-		resp.Body.Close()
+		// Typically, we should be able to fail over to a different
+		// available server within one second, even including the up
+		// to 500ms of backoff we are doing below.
+		//
+		// Only when the network is frozen, the timer func will be
+		// called.
+		unavailability = time.AfterFunc(1*time.Second, func() {
+			s.injectUnavailabilityMessage("Early warning: not currently retrieving messages from RobustIRC")
+		})
 
 		// Delay reconnecting for somewhere in between [250, 500) ms to avoid
 		// overloading the remaining servers from many clients at once when one
 		// server fails.
 		time.Sleep(time.Duration(250+rand.Int63n(250)) * time.Millisecond)
+	}
+	if unavailability != nil {
+		unavailability.Stop()
 	}
 }
 
