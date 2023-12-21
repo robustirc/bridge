@@ -257,6 +257,13 @@ type doer interface {
 }
 
 type RobustSession struct {
+	// baseCtx is used for every outgoing call. Because this context is provided
+	// at session creation time, setting a deadline does not make sense, but the
+	// context can still be used for attaching credentials or cancellation, for
+	// example.
+	baseCtx   context.Context
+	tlsCAFile string
+
 	IrcPrefix *irc.Prefix
 	Messages  chan string
 	Errors    chan error
@@ -354,6 +361,18 @@ func (s *RobustSession) sendRequest(ctx context.Context, method, path string, da
 	return "", nil, NoSuchSession
 }
 
+// Option is a function that configures a RobustSession
+type Option func(*RobustSession)
+
+// WithTLSCAFile will load the Certificate Authority certificate from the
+// specified file and use them for HTTPS verification. Useful when working with
+// self-signed certificates.
+func WithTLSCAFile(tlsCAFile string) Option {
+	return func(s *RobustSession) {
+		s.tlsCAFile = tlsCAFile
+	}
+}
+
 // newClient can be overridden in custom builds where additional source files in
 // this package can change newClient from their func init.
 var newClient = func(transport *http.Transport) doer {
@@ -370,7 +389,22 @@ var newClient = func(transport *http.Transport) doer {
 // tlsCAFile specifies the path to an x509 root certificate, which is mostly
 // useful for testing. If empty, the system CA store will be used
 // (recommended).
+//
+// Prefer CreateContext() over Create() for new code, but Create will stay
+// around and keep working.
 func Create(network string, tlsCAFile string) (*RobustSession, error) {
+	return CreateContext(context.Background(), network, WithTLSCAFile(tlsCAFile))
+}
+
+// CreateContext creates a new RobustIRC session. It resolves the given network
+// name (e.g. "robustirc.net") to a set of servers by querying the
+// _robustirc._tcp.<network> SRV record and sends the CreateSession request.
+//
+// When err == nil, the caller MUST read the RobustSession.Messages and
+// RobustSession.Errors channels.
+//
+// Prefer CreateContext() over Create() for new code.
+func CreateContext(baseCtx context.Context, network string, opts ...Option) (*RobustSession, error) {
 	networksMu.Lock()
 	n, ok := networks[network]
 	if !ok {
@@ -384,16 +418,29 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 	}
 	networksMu.Unlock()
 
+	s := &RobustSession{
+		baseCtx:   baseCtx,
+		Messages:  make(chan string),
+		Errors:    make(chan error),
+		done:      make(chan bool),
+		network:   n,
+		sendingMu: &sync.Mutex{},
+	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
 	var tlsConfig *tls.Config
 
-	if tlsCAFile != "" {
+	if s.tlsCAFile != "" {
 		roots := x509.NewCertPool()
-		contents, err := ioutil.ReadFile(tlsCAFile)
+		contents, err := ioutil.ReadFile(s.tlsCAFile)
 		if err != nil {
 			log.Fatalf("Could not read cert.pem: %v", err)
 		}
 		if !roots.AppendCertsFromPEM(contents) {
-			log.Fatalf("Could not parse %q", tlsCAFile)
+			log.Fatalf("Could not parse %q", s.tlsCAFile)
 		}
 		tlsConfig = &tls.Config{RootCAs: roots}
 	}
@@ -414,16 +461,9 @@ func Create(network string, tlsCAFile string) (*RobustSession, error) {
 
 	setupTLSHandshakeTimeout(transport, 10*time.Second)
 
-	s := &RobustSession{
-		Messages:  make(chan string),
-		Errors:    make(chan error),
-		done:      make(chan bool),
-		network:   n,
-		client:    newClient(transport),
-		sendingMu: &sync.Mutex{},
-	}
+	s.client = newClient(transport)
 
-	_, resp, err := s.sendRequest(context.Background(), "POST", pathCreateSession, nil)
+	_, resp, err := s.sendRequest(s.baseCtx, "POST", pathCreateSession, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +502,7 @@ func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
 }
 
 func (s *RobustSession) getMessages1(lastseen robustId, unavailability *time.Timer) (robustId, error) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.baseCtx)
 	defer cancel()
 
 	target, resp, err := s.sendRequest(ctx, "GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
@@ -633,7 +673,7 @@ func (s *RobustSession) PostMessage(message string) error {
 		return fmt.Errorf("Message could not be encoded as JSON: %v\n", err)
 	}
 
-	target, resp, err := s.sendRequest(context.Background(), "POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
+	target, resp, err := s.sendRequest(s.baseCtx, "POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
 	if err != nil {
 		return err
 	}
@@ -669,7 +709,7 @@ func (s *RobustSession) Delete(quitmessage string) error {
 	if err != nil {
 		return err
 	}
-	_, resp, err := s.sendRequest(context.Background(), "DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
+	_, resp, err := s.sendRequest(s.baseCtx, "DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
 	if err != nil {
 		return err
 	}
