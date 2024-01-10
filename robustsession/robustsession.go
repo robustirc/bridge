@@ -314,9 +314,16 @@ func (s *RobustSession) sendRequest(ctx context.Context, method, path string, da
 		// GET requests are for read-only state and can be answered by any server.
 		target := s.network.server(method == "GET")
 		requrl := fmt.Sprintf("https://%s%s", target, path)
+		nonHTTPTransport := strings.Contains(target, "/")
+		if nonHTTPTransport {
+			requrl = path
+		}
 		req, err := http.NewRequest(method, requrl, bytes.NewBuffer(data))
 		if err != nil {
 			return "", nil, err
+		}
+		if nonHTTPTransport {
+			req.Host = target
 		}
 		req = req.WithContext(ctx)
 		req.Header.Set("User-Agent", Version)
