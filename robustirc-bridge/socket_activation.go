@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -31,7 +32,7 @@ func nfds() int {
 // handleSocketActivation handles listening on the systemd-provided sockets.
 // It can return an error to differentiate between this implementation and
 // the no-op on Windows.
-func handleSocketActivation(n int) error {
+func handleSocketActivation(n int, connWG *sync.WaitGroup) error {
 	names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
 	os.Unsetenv("LISTEN_PID")
 	os.Unsetenv("LISTEN_FDS")
@@ -63,7 +64,11 @@ func handleSocketActivation(n int) error {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				go p.handleIRC(conn)
+				connWG.Add(1)
+				go func() {
+					defer connWG.Done()
+					p.handleIRC(conn)
+				}()
 			}
 		}()
 	}
