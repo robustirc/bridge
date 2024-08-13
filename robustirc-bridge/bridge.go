@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -539,6 +540,7 @@ func main() {
 
 	var listeners []net.Listener
 
+	var connWG sync.WaitGroup
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 	go func() {
@@ -547,7 +549,17 @@ func main() {
 		for _, ln := range listeners {
 			ln.Close()
 		}
-		time.Sleep(*closeTimeout)
+		connsDone := make(chan struct{})
+		go func() {
+			connWG.Wait()
+			close(connsDone)
+		}()
+		select {
+		case <-time.After(*closeTimeout):
+			log.Println("Timed out waiting for connections to close")
+		case <-connsDone:
+			log.Println("Connections all report closed")
+		}
 		log.Printf("Exiting due to signal %q\n", sig)
 		os.Exit(int(syscall.SIGTERM) | 0x80)
 	}()
@@ -558,7 +570,7 @@ func main() {
 		listeners = append(listeners, ln)
 		go func() {
 			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS). Specify an empty -socks= to disable.\n", *socks)
-			if err := serveSocks(ln); err != nil {
+			if err := serveSocks(ln, &connWG); err != nil {
 				log.Fatal(err)
 			}
 		}()
@@ -570,7 +582,7 @@ func main() {
 		log.Printf("Not listening on %q (IRC) because -network= was not specified.\n", *listen)
 		ln := maybeTLSListener(*socks)
 		listeners = append(listeners, ln)
-		log.Fatal(serveSocks(ln))
+		log.Fatal(serveSocks(ln, &connWG))
 	}
 
 	// IRC
@@ -592,12 +604,16 @@ func main() {
 						time.Sleep(1 * time.Second)
 						continue
 					}
-					go p.handleIRC(conn)
+					connWG.Add(1)
+					go func() {
+						defer connWG.Done()
+						p.handleIRC(conn)
+					}()
 				}
 			}()
 		}
 	} else if n := nfds(); *network != "" && n > 0 {
-		if err := handleSocketActivation(n); err != nil {
+		if err := handleSocketActivation(n, &connWG); err != nil {
 			log.Fatal(err)
 		}
 	}

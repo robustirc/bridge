@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -54,7 +55,7 @@ type socksConnectionData struct {
 	Port     uint16
 }
 
-func serveSocks(ln net.Listener) error {
+func serveSocks(ln net.Listener, connWG *sync.WaitGroup) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -63,7 +64,9 @@ func serveSocks(ln net.Listener) error {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		connWG.Add(1)
 		go func() {
+			defer connWG.Done()
 			s := &socksServer{conn}
 
 			if err := s.handleConn(); err != nil {
