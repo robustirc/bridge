@@ -87,6 +87,10 @@ var (
 	ignoreServerListUpdates = flag.Bool("ignore_server_list_updates",
 		false,
 		"RobustPing messages contain the current list of server addresses of the network, which robustsession uses to keep the list of servers up to date without having to periodically re-resolve the DNS names (--network flag). If IgnoreServerListUpdates is true, robustsession will ignore the list of servers. This is useful when working with different names on client and server, for example when the client connects via a port forwarding.")
+
+	closeTimeout = flag.Duration("shutdown_timeout",
+		1*time.Second,
+		"Time to wait for all outstanding connections to shutdown when receiving a SIGTERM.")
 )
 
 // TODO(secure): persistent state:
@@ -530,12 +534,11 @@ func main() {
 	signal.Notify(signalChan, syscall.SIGTERM)
 	go func() {
 		sig := <-signalChan
-		closeTimeout := 1 * time.Second
-		log.Printf("Received signal %q, giving connections %v to close\n", sig, closeTimeout)
+		log.Printf("Received signal %q, giving connections %v to close\n", sig, *closeTimeout)
 		for _, ln := range listeners {
 			ln.Close()
 		}
-		time.Sleep(closeTimeout)
+		time.Sleep(*closeTimeout)
 		log.Printf("Exiting due to signal %q\n", sig)
 		os.Exit(int(syscall.SIGTERM) | 0x80)
 	}()
