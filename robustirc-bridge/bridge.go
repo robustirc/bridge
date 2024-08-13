@@ -371,6 +371,15 @@ func (p *bridge) handleIRC(conn net.Conn) {
 			sendRobust = nil
 		}
 
+		// Ensure that we pump signalChan first if anything is waiting in it.
+		select {
+		case sig := <-signalChan:
+			killmsg = fmt.Sprintf("Bridge exiting upon receiving signal (%v)", sig)
+			quitmsg = killmsg
+			return
+		default:
+		}
+
 		select {
 		case sig := <-signalChan:
 			killmsg = fmt.Sprintf("Bridge exiting upon receiving signal (%v)", sig)
