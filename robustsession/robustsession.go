@@ -495,6 +495,47 @@ func CreateContext(baseCtx context.Context, network string, opts ...Option) (*Ro
 	return s, nil
 }
 
+type unavailabilityState struct {
+	// config
+	session *RobustSession
+
+	// state
+	timer      *time.Timer
+	notifiedMu sync.Mutex
+	notified   bool
+}
+
+func (us *unavailabilityState) setNotified(n bool) {
+	us.notifiedMu.Lock()
+	defer us.notifiedMu.Unlock()
+	us.notified = n
+}
+
+func (us *unavailabilityState) hasNotified() bool {
+	us.notifiedMu.Lock()
+	defer us.notifiedMu.Unlock()
+	return us.notified
+}
+
+func (us *unavailabilityState) start() {
+	us.timer = time.AfterFunc(1*time.Second, func() {
+		us.session.injectUnavailabilityMessage("Early warning: not currently retrieving messages from RobustIRC")
+		us.setNotified(true)
+	})
+}
+
+func (us *unavailabilityState) stopAndMaybeNotify() {
+	if us.timer == nil {
+		return
+	}
+	us.timer.Stop()
+	us.timer = nil
+	if us.hasNotified() {
+		us.session.injectUnavailabilityMessage("RobustIRC connectivity restored!")
+	}
+	us.setNotified(false)
+}
+
 func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
 	msgfmt := s.UnavailableMessageFormat
 	if msgfmt == "" {
@@ -508,7 +549,7 @@ func (s *RobustSession) injectUnavailabilityMessage(umsg string) {
 	s.Messages <- ":" + s.IrcPrefix.String() + " NOTICE $*.localnet :" + msg
 }
 
-func (s *RobustSession) getMessages1(lastseen robustId, unavailability *time.Timer) (robustId, error) {
+func (s *RobustSession) getMessages1(lastseen robustId, unavailability *unavailabilityState) (robustId, error) {
 	ctx, cancel := context.WithCancel(s.baseCtx)
 	defer cancel()
 
@@ -517,6 +558,8 @@ func (s *RobustSession) getMessages1(lastseen robustId, unavailability *time.Tim
 		return lastseen, err
 	}
 	defer resp.Body.Close()
+
+	unavailability.stopAndMaybeNotify()
 
 	dec := json.NewDecoder(resp.Body)
 	msgchan := make(chan robustMessage)
@@ -568,11 +611,7 @@ func (s *RobustSession) getMessages1(lastseen robustId, unavailability *time.Tim
 			return lastseen, nil
 
 		case msg := <-msgchan:
-			if unavailability != nil {
-				unavailability.Stop()
-				unavailability = nil
-				s.injectUnavailabilityMessage("RobustIRC connectivity restored!")
-			}
+			unavailability.stopAndMaybeNotify()
 
 			if msg.Type == robustPing {
 				if len(msg.Servers) > 0 && !s.IgnoreServerListUpdates {
@@ -611,7 +650,9 @@ func (s *RobustSession) getMessages() {
 	}()
 
 	var lastseen robustId
-	var unavailability *time.Timer
+	unavailability := &unavailabilityState{
+		session: s,
+	}
 	for !s.isDeleted() {
 		var err error
 		lastseen, err = s.getMessages1(lastseen, unavailability)
@@ -626,18 +667,14 @@ func (s *RobustSession) getMessages() {
 		//
 		// Only when the network is frozen, the timer func will be
 		// called.
-		unavailability = time.AfterFunc(1*time.Second, func() {
-			s.injectUnavailabilityMessage("Early warning: not currently retrieving messages from RobustIRC")
-		})
+		unavailability.start()
 
 		// Delay reconnecting for somewhere in between [250, 500) ms to avoid
 		// overloading the remaining servers from many clients at once when one
 		// server fails.
 		time.Sleep(time.Duration(250+rand.Int63n(250)) * time.Millisecond)
 	}
-	if unavailability != nil {
-		unavailability.Stop()
-	}
+	unavailability.stopAndMaybeNotify()
 }
 
 // SessionId returns a string that identifies the session. It should be used in
