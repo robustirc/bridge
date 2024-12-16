@@ -214,14 +214,21 @@ func (n *Network) setServers(servers []string) {
 	n.servers = servers
 }
 
-// prefer adds the specified server to the front of the servers list, thereby
-// trying to prefer it over other servers for the next request. Note that
-// exponential backoff overrides this, so this is only a hint, not a guarantee.
+// prefer moves (or adds, if it doesn't already exist) the specified server to
+// the top of the servers list, thereby trying to prefer it over other servers
+// for the next request. Note that exponential backoff overrides this, so this
+// is only a hint, not a guarantee.
 func (n *Network) prefer(server string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	n.servers = append([]string{server}, n.servers...)
+	servers := []string{server}
+	for i := 0; i < len(n.servers); i++ {
+		if n.servers[i] != server {
+			servers = append(servers, n.servers[i])
+		}
+	}
+	n.servers = servers
 }
 
 func (n *Network) failed(server string) {
