@@ -318,6 +318,9 @@ func (s *RobustSession) String() string {
 
 func (s *RobustSession) sendRequest(ctx context.Context, method, path string, data []byte) (string, *http.Response, error) {
 	for !s.isDeleted() {
+		if err := ctx.Err(); err != nil {
+			return "", nil, err
+		}
 		// GET requests are for read-only state and can be answered by any server.
 		target := s.network.server(method == "GET")
 		requrl := fmt.Sprintf("https://%s%s", target, path)
