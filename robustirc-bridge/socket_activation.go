@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"os"
@@ -32,7 +33,7 @@ func nfds() int {
 // handleSocketActivation handles listening on the systemd-provided sockets.
 // It can return an error to differentiate between this implementation and
 // the no-op on Windows.
-func handleSocketActivation(n int, connWG *sync.WaitGroup) error {
+func handleSocketActivation(ctx context.Context, n int, connWG *sync.WaitGroup) error {
 	names := strings.Split(os.Getenv("LISTEN_FDNAMES"), ":")
 	os.Unsetenv("LISTEN_PID")
 	os.Unsetenv("LISTEN_FDS")
@@ -67,7 +68,7 @@ func handleSocketActivation(n int, connWG *sync.WaitGroup) error {
 				connWG.Add(1)
 				go func() {
 					defer connWG.Done()
-					p.handleIRC(conn)
+					p.handleIRC(ctx, conn)
 				}()
 			}
 		}()
