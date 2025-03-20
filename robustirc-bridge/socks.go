@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -55,7 +56,7 @@ type socksConnectionData struct {
 	Port     uint16
 }
 
-func serveSocks(ln net.Listener, connWG *sync.WaitGroup) error {
+func serveSocks(ctx context.Context, ln net.Listener, connWG *sync.WaitGroup) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -69,7 +70,7 @@ func serveSocks(ln net.Listener, connWG *sync.WaitGroup) error {
 			defer connWG.Done()
 			s := &socksServer{conn}
 
-			if err := s.handleConn(); err != nil {
+			if err := s.handleConn(ctx); err != nil {
 				log.Printf("Could not SOCKS: %v\n", err)
 			}
 		}()
@@ -79,7 +80,7 @@ func serveSocks(ln net.Listener, connWG *sync.WaitGroup) error {
 	return nil
 }
 
-func (s *socksServer) handleConn() (err error) {
+func (s *socksServer) handleConn(ctx context.Context) (err error) {
 	defer s.conn.Close()
 
 	if err = s.greet(); err != nil {
@@ -122,7 +123,7 @@ func (s *socksServer) handleConn() (err error) {
 		return err
 	}
 
-	p.handleIRC(s.conn)
+	p.handleIRC(ctx, s.conn)
 	// never returns
 	return nil
 }

@@ -9,6 +9,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -298,7 +299,7 @@ func (s *ircsession) getMessages() {
 	}
 }
 
-func (p *bridge) handleIRC(conn net.Conn) {
+func (p *bridge) handleIRC(ctx context.Context, conn net.Conn) {
 	var quitmsg, killmsg string
 	var waitingForPingReply bool
 
@@ -527,6 +528,7 @@ func main() {
 		log.Fatal("You must specify either -network and -listen, or -socks.")
 	}
 
+	ctx := context.Background()
 	if *httpAddress != "" {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			for _, n := range robustsession.CopyNetworks() {
@@ -570,7 +572,7 @@ func main() {
 		listeners = append(listeners, ln)
 		go func() {
 			log.Printf("RobustIRC IRC bridge listening on %q (SOCKS). Specify an empty -socks= to disable.\n", *socks)
-			if err := serveSocks(ln, &connWG); err != nil {
+			if err := serveSocks(ctx, ln, &connWG); err != nil {
 				log.Fatal(err)
 			}
 		}()
@@ -582,7 +584,7 @@ func main() {
 		log.Printf("Not listening on %q (IRC) because -network= was not specified.\n", *listen)
 		ln := maybeTLSListener(*socks)
 		listeners = append(listeners, ln)
-		log.Fatal(serveSocks(ln, &connWG))
+		log.Fatal(serveSocks(ctx, ln, &connWG))
 	}
 
 	// IRC
@@ -607,13 +609,13 @@ func main() {
 					connWG.Add(1)
 					go func() {
 						defer connWG.Done()
-						p.handleIRC(conn)
+						p.handleIRC(ctx, conn)
 					}()
 				}
 			}()
 		}
 	} else if n := nfds(); *network != "" && n > 0 {
-		if err := handleSocketActivation(n, &connWG); err != nil {
+		if err := handleSocketActivation(ctx, n, &connWG); err != nil {
 			log.Fatal(err)
 		}
 	}
