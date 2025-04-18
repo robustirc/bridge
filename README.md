@@ -1,1 +1,1 @@
-Please see http://robustirc.net/docs.html for documentation.
+Please see https://robustirc.net/docs/ for documentation.
