@@ -353,7 +353,7 @@ func (s *RobustSession) sendRequest(ctx context.Context, method, path string, da
 		}
 		if resp.StatusCode == http.StatusOK {
 			if cl := resp.Header.Get("Content-Location"); cl != "" {
-				if location, err := url.Parse(cl); err == nil {
+				if location, err := url.Parse(cl); err == nil && !s.IgnoreServerListUpdates {
 					s.network.prefer(location.Host)
 				}
 			}
