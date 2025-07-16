@@ -543,12 +543,16 @@ func (us *unavailabilityState) start() {
 	})
 }
 
-func (us *unavailabilityState) stopAndMaybeNotify() {
+func (us *unavailabilityState) stopWithoutNotifying() {
 	if us.timer == nil {
 		return
 	}
 	us.timer.Stop()
 	us.timer = nil
+}
+
+func (us *unavailabilityState) stopAndMaybeNotify() {
+	us.stopWithoutNotifying()
 	if us.hasNotified() {
 		us.session.injectUnavailabilityMessage("RobustIRC connectivity restored!")
 	}
@@ -693,7 +697,7 @@ func (s *RobustSession) getMessages() {
 		// server fails.
 		time.Sleep(time.Duration(250+rand.Int63n(250)) * time.Millisecond)
 	}
-	unavailability.stopAndMaybeNotify()
+	unavailability.stopWithoutNotifying()
 }
 
 // SessionId returns a string that identifies the session. It should be used in
