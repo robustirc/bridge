@@ -476,6 +476,9 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 // on the -tls_cert_path and -tls_key_path flag values.
 func maybeTLSListener(addr string) net.Listener {
 	if *useUnixSocket {
+		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
+			log.Fatalf("cleaning up socket %q: %v", addr, err)
+		}
 		ln, err := net.Listen("unix", addr)
 		if err != nil {
 			log.Fatal(err)
