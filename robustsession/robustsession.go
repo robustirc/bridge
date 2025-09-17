@@ -31,6 +31,7 @@ const (
 	pathDeleteSession = "/robustirc/v1/%s"
 	pathPostMessage   = "/robustirc/v1/%s/message"
 	pathGetMessages   = "/robustirc/v1/%s/messages?lastseen=%s"
+	requestTimeout    = 4 * time.Minute
 )
 
 const Version = "RobustIRC Bridge v1.11"
@@ -327,6 +328,9 @@ func (s *RobustSession) String() string {
 
 func (s *RobustSession) sendRequest(ctx context.Context, method, path string, data []byte) (string, *http.Response, error) {
 	for !s.isDeleted() {
+		// NOTE: The Sleep() in server() can cause us to delay responding to
+		// context cancellation up to the maximum backoff in failed(). (And thus
+		// overrun timeouts by that much.)
 		if err := ctx.Err(); err != nil {
 			return "", nil, err
 		}
@@ -489,7 +493,11 @@ func CreateContext(baseCtx context.Context, network string, opts ...Option) (*Ro
 
 	s.client = newClient(transport)
 
-	_, resp, err := s.sendRequest(s.baseCtx, "POST", pathCreateSession, nil)
+	// Use a shorter timeout here since we want to ensure we bail out of session
+	// creation before the IRC client gives up on connecting.
+	ctx, cancel := context.WithTimeout(s.baseCtx, 1*time.Minute)
+	defer cancel()
+	_, resp, err := s.sendRequest(ctx, "POST", pathCreateSession, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -576,6 +584,8 @@ func (s *RobustSession) getMessages1(lastseen robustId, unavailability *unavaila
 	ctx, cancel := context.WithCancel(s.baseCtx)
 	defer cancel()
 
+	// NOTE: We should apply a timeout to the context passed to sendRequest, but
+	// setting a timeout would cancel the long-running GET request.
 	target, resp, err := s.sendRequest(ctx, "GET", fmt.Sprintf(pathGetMessages, s.sessionId, lastseen.String()), nil)
 	if err != nil {
 		return lastseen, err
@@ -740,7 +750,9 @@ func (s *RobustSession) PostMessage(message string) error {
 		return fmt.Errorf("Message could not be encoded as JSON: %v\n", err)
 	}
 
-	target, resp, err := s.sendRequest(s.baseCtx, "POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
+	ctx, cancel := context.WithTimeout(s.baseCtx, requestTimeout)
+	defer cancel()
+	target, resp, err := s.sendRequest(ctx, "POST", fmt.Sprintf(pathPostMessage, s.sessionId), b)
 	if err != nil {
 		return err
 	}
@@ -776,7 +788,9 @@ func (s *RobustSession) Delete(quitmessage string) error {
 	if err != nil {
 		return err
 	}
-	_, resp, err := s.sendRequest(s.baseCtx, "DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
+	ctx, cancel := context.WithTimeout(s.baseCtx, requestTimeout)
+	defer cancel()
+	_, resp, err := s.sendRequest(ctx, "DELETE", fmt.Sprintf(pathDeleteSession, s.sessionId), b)
 	if err != nil {
 		return err
 	}
