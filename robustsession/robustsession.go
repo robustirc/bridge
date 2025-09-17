@@ -31,7 +31,9 @@ const (
 	pathDeleteSession = "/robustirc/v1/%s"
 	pathPostMessage   = "/robustirc/v1/%s/message"
 	pathGetMessages   = "/robustirc/v1/%s/messages?lastseen=%s"
-	requestTimeout    = 4 * time.Minute
+	// IRC clients generally time out around five minutes.
+	// We want to beat them to it give better error diagnostics.
+	requestTimeout = 290 * time.Second
 )
 
 const Version = "RobustIRC Bridge v1.11"
@@ -176,8 +178,8 @@ func newNetwork(networkname string) (*Network, error) {
 
 // server (eventually) returns the host:port to which we should connect to. In
 // case back-off prevents us from connecting anywhere right now, the function
-// blocks until back-off is over.
-func (n *Network) server(random bool) string {
+// blocks until back-off is over. Returns error on context cancellation.
+func (n *Network) server(ctx context.Context, random bool) (string, error) {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 
@@ -190,7 +192,7 @@ func (n *Network) server(random bool) string {
 			server := n.servers[rand.Intn(len(n.servers))]
 			wait := n.backoff[server].next.Sub(time.Now())
 			if wait <= 0 {
-				return server
+				return server, nil
 			}
 		}
 		// Try to use the next available server, searching in offset order
@@ -200,18 +202,23 @@ func (n *Network) server(random bool) string {
 			wait := n.backoff[n.servers[idx]].next.Sub(time.Now())
 			if wait <= 0 {
 				n.idxOffset = (idx + 1) % len(n.servers)
-				return n.servers[idx]
+				return n.servers[idx], nil
 			}
 			if wait < soonest {
 				soonest = wait
 			}
 		}
 
-		time.Sleep(soonest)
+		select {
+		case <-ctx.Done():
+			log.Print("Server selection aborted by context cancellation\n")
+			return "", ctx.Err()
+		case <-time.After(soonest):
+		}
 	}
 
 	// Unreached, but necessary for compiling with go1.0.2 (debian stable).
-	return ""
+	return "", fmt.Errorf("unreachable code reached")
 }
 
 func (n *Network) setServers(servers []string) {
@@ -328,14 +335,14 @@ func (s *RobustSession) String() string {
 
 func (s *RobustSession) sendRequest(ctx context.Context, method, path string, data []byte) (string, *http.Response, error) {
 	for !s.isDeleted() {
-		// NOTE: The Sleep() in server() can cause us to delay responding to
-		// context cancellation up to the maximum backoff in failed(). (And thus
-		// overrun timeouts by that much.)
 		if err := ctx.Err(); err != nil {
 			return "", nil, err
 		}
 		// GET requests are for read-only state and can be answered by any server.
-		target := s.network.server(method == "GET")
+		target, err := s.network.server(ctx, method == "GET")
+		if err != nil {
+			return "", nil, err
+		}
 		requrl := fmt.Sprintf("https://%s%s", target, path)
 		nonHTTPTransport := strings.Contains(target, "/")
 		if nonHTTPTransport {
