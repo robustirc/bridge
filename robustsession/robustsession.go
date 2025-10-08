@@ -98,9 +98,10 @@ func CopyNetworks() []*Network {
 // This type is only exported so that you can expose internal network state
 // for debugging via CopyNetworks().
 type Network struct {
+	// mu covers all following fields.
+	mu        sync.Mutex
 	servers   []string
 	idxOffset int
-	mu        sync.RWMutex
 	backoff   map[string]backoffState
 }
 
@@ -180,8 +181,8 @@ func newNetwork(networkname string) (*Network, error) {
 // case back-off prevents us from connecting anywhere right now, the function
 // blocks until back-off is over. Returns error on context cancellation.
 func (n *Network) server(ctx context.Context, random bool) (string, error) {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	for {
 		soonest := time.Duration(math.MaxInt64)
