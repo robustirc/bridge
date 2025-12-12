@@ -600,8 +600,6 @@ func (s *RobustSession) getMessages1(lastseen robustId, unavailability *unavaila
 	}
 	defer resp.Body.Close()
 
-	unavailability.stopAndMaybeNotify()
-
 	dec := json.NewDecoder(resp.Body)
 	msgchan := make(chan robustMessage)
 	errchan := make(chan error)
@@ -651,6 +649,8 @@ func (s *RobustSession) getMessages1(lastseen robustId, unavailability *unavaila
 			s.network.failed(target)
 			return lastseen, nil
 
+		// The server injects a PING, so we should always hit this case promptly after a successful GET
+		// with a valid response, and thus stop unavailability.
 		case msg := <-msgchan:
 			unavailability.stopAndMaybeNotify()
 
